@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#102a43">
+<meta name="description" content="Streetwise Construction Manager — construction project and commercial control.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>Streetwise Construction Manager</title>
+<style>
+:root{--navy:#102a43;--blue:#1f5f8b;--gold:#d7aa45;--bg:#f3f6f8;--card:#fff;--text:#17232e;--muted:#6b7b88;--line:#dfe6eb;--green:#237b55;--red:#b84747;--amber:#bd7620;--shadow:0 6px 20px rgba(16,42,67,.07)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+button,input,select,textarea{font:inherit}button{cursor:pointer}
+.app{min-height:100vh;display:flex}.sidebar{width:252px;position:fixed;z-index:20;top:0;bottom:0;left:0;background:linear-gradient(180deg,#102a43,#0c2236);color:#fff;padding:18px 14px;overflow:auto}
+.brand{display:flex;align-items:center;gap:11px;padding:7px 9px 19px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:12px}.logo{width:42px;height:42px;background:var(--gold);border-radius:11px;color:var(--navy);font-weight:950;display:grid;place-items:center}.brand b{font-size:15px}.brand small{display:block;color:#a9bdcb;font-size:10px;margin-top:2px}
+.nav button{display:flex;width:100%;align-items:center;gap:11px;border:0;background:transparent;color:#cdd9e1;border-radius:9px;padding:10px 11px;margin:2px 0;text-align:left;font-size:13px}.nav button:hover,.nav button.active{background:rgba(255,255,255,.1);color:#fff}.ico{width:22px;text-align:center;font-size:16px}.sidefoot{position:sticky;bottom:0;background:linear-gradient(180deg,transparent,#0c2236 25%);padding:35px 8px 5px;color:#7890a0;font-size:10px}
+.main{margin-left:252px;width:calc(100% - 252px);padding:22px 27px 45px}.top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}.eyebrow{color:var(--blue);font-size:11px;text-transform:uppercase;font-weight:800;letter-spacing:.08em}.top h1{font-size:25px;margin:3px 0 2px}.top p{margin:0;color:var(--muted);font-size:12px}.actions{display:flex;gap:8px;align-items:center}.btn{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:8px;padding:9px 12px;font-weight:700;font-size:12px}.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}.btn.gold{background:var(--gold);border-color:var(--gold);color:var(--navy)}.install{display:none}.install.show{display:inline-flex}
+.module{display:none}.module.active{display:block}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;box-shadow:var(--shadow)}.metric small{font-size:11px;color:var(--muted)}.metric .num{font-size:24px;font-weight:850;margin:6px 0}.metric .note{font-size:11px}.up{color:var(--green)}.warn{color:var(--amber)}.down{color:var(--red)}
+.section{margin-top:14px}.two{display:grid;grid-template-columns:1.45fr 1fr;gap:13px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.section-head h2{font-size:15px;margin:0}.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}tr:last-child td{border-bottom:0}.pill{font-size:10px;font-weight:800;padding:4px 7px;border-radius:999px;background:#eef2f5}.pill.green{background:#e3f2eb;color:var(--green)}.pill.orange{background:#fbefdc;color:var(--amber)}.pill.red{background:#f8e4e4;color:var(--red)}
+.bar{height:7px;background:#e9eef2;border-radius:8px;overflow:hidden;min-width:75px}.bar i{display:block;height:100%;background:var(--blue);border-radius:8px}.row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px}.row:last-child{border-bottom:0}.row strong{font-weight:750}
+.module-tools{display:flex;gap:7px;align-items:center}.empty{text-align:center;padding:25px;color:var(--muted)}
+.form{display:grid;gap:11px}.form label{display:grid;gap:5px;font-size:11px;font-weight:800;color:var(--muted)}.form input,.form select,.form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff;color:var(--text)}.form textarea{min-height:85px}
+.modal{position:fixed;z-index:50;inset:0;background:rgba(8,24,38,.55);display:none;align-items:center;justify-content:center;padding:18px}.modal.open{display:flex}.modalbox{width:min(510px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:14px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.25)}.modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.close{border:0;background:#eef2f5;border-radius:8px;width:33px;height:33px;font-size:20px}
+.mobilebar{display:none}.toast{position:fixed;z-index:100;right:20px;bottom:20px;background:var(--navy);color:#fff;padding:10px 14px;border-radius:9px;box-shadow:var(--shadow);font-size:12px;display:none}.toast.show{display:block}
+@media(max-width:950px){.sidebar{display:none}.main{margin:0;width:100%;padding:16px 14px 82px}.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.mobilebar{display:flex;position:fixed;z-index:30;bottom:0;left:0;right:0;height:65px;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-top:1px solid var(--line);justify-content:space-around;padding-bottom:env(safe-area-inset-bottom)}.mobilebar button{border:0;background:none;color:var(--muted);font-size:9px;min-width:54px}.mobilebar button.active{color:var(--navy);font-weight:850}.mobilebar span{display:block;font-size:18px;margin-bottom:2px}.top h1{font-size:21px}.install{display:none!important}}
+@media(max-width:540px){.grid{gap:8px}.card{padding:12px}.metric .num{font-size:20px}.actions .secondary{display:none}table{font-size:11px}.top{align-items:flex-start}.top .btn{padding:8px}.main{padding-left:11px;padding-right:11px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+ <div class="brand"><div class="logo">SW</div><div><b>STREETWISE</b><small>Construction Manager</small></div></div>
+ <nav class="nav" id="nav"></nav>
+ <div class="sidefoot">Prototype v2 · Offline-ready PWA</div>
+</aside>
+<main class="main">
+ <header class="top">
+  <div><div class="eyebrow">Construction Control System</div><h1 id="title">Dashboard</h1><p id="subtitle">Portfolio, commercial and site control</p></div>
+  <div class="actions"><button class="btn install" id="installBtn" onclick="installApp()">Install App</button><button class="btn secondary" onclick="exportData()">Export</button><button class="btn primary" onclick="openModal('project')">+ New Project</button></div>
+ </header>
+ <div id="modules"></div>
+</main>
+</div>
+<nav class="mobilebar" id="mobilebar"></nav>
+<div class="modal" id="modal"><div class="modalbox"><div class="modalhead"><h2 id="modalTitle" style="margin:0;font-size:17px"></h2><button class="close" onclick="closeModal()">×</button></div><div id="modalBody"></div></div></div>
+<div class="toast" id="toast"></div>
+<script>
+const modules=[['dashboard','📊','Dashboard'],['projects','🏗️','Projects'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
+const seed={projects:[
+{id:1,name:'Kilimani Apartments',client:'Mavuno Developments',status:'Active',budget:48500000,spent:18350000,progress:38,location:'Nairobi'},
+{id:2,name:'Ruiru Warehouse',client:'Eastline Logistics',status:'Active',budget:22100000,spent:9100000,progress:44,location:'Ruiru'},
+{id:3,name:'Westlands Office Fit-out',client:'Private Client',status:'On Hold',budget:12700000,spent:4600000,progress:31,location:'Westlands'}],
+materials:[{name:'Cement 32.5R',unit:'Bags',stock:820,reorder:300,unitCost:760},{name:'12mm Reinforcement',unit:'Tonnes',stock:18.4,reorder:8,unitCost:132000},{name:'Machine-cut stone',unit:'m³',stock:42,reorder:20,unitCost:5200},{name:'Ballast',unit:'m³',stock:31,reorder:15,unitCost:4100}],
+labour:[{trade:'Masons',workers:12,rate:1800,days:23},{trade:'Steel Fixers',workers:8,rate:2100,days:21},{trade:'Carpenters',workers:10,rate:2000,days:22},{trade:'General Labour',workers:18,rate:1300,days:24}],
+boq:[{code:'A01',description:'Preliminaries',budget:3200000,actual:2980000,progress:92},{code:'B02',description:'Substructure',budget:9800000,actual:8420000,progress:86},{code:'C03',description:'Frame & Slab',budget:15400000,actual:4950000,progress:32},{code:'D04',description:'Masonry',budget:7200000,actual:1200000,progress:17}],
+procurement:[{item:'12mm Reinforcement',supplier:'SteelHub',qty:'8 t',value:1056000,status:'Ordered'},{item:'Cement 32.5R',supplier:'BuildMart',qty:'500 bags',value:380000,status:'Delivered'},{item:'Timber 4x2',supplier:'Timberline',qty:'1,200 lm',value:276000,status:'Pending'}],
+variations:[{ref:'VO-001',project:'Kilimani Apartments',description:'Additional drainage works',value:680000,status:'Submitted'},{ref:'VO-002',project:'Ruiru Warehouse',description:'Door schedule revision',value:420000,status:'Approved'}],
+expenses:[{date:'2026-09-25',project:'Kilimani Apartments',category:'Petty Cash',description:'Minor tools',amount:18400},{date:'2026-09-24',project:'Ruiru Warehouse',category:'Transport',description:'Material delivery',amount:27500},{date:'2026-09-22',project:'Kilimani Apartments',category:'Site',description:'Printing & stationery',amount:6200}],
+snags:[{id:'SN-014',project:'Kilimani Apartments',item:'Repair plaster cracks — Block A',priority:'High',status:'Open'},{id:'SN-015',project:'Ruiru Warehouse',item:'Adjust loading bay door',priority:'Medium',status:'Assigned'},{id:'SN-016',project:'Kilimani Apartments',item:'Replace damaged tile',priority:'Low',status:'Closed'}],
+reports:[{date:'2026-09-25',project:'Kilimani Apartments',type:'Daily Site Report',author:'Site Team',status:'Submitted'},{date:'2026-09-24',project:'Ruiru Warehouse',type:'Weekly Progress',author:'PM',status:'Submitted'}]};
+let data=JSON.parse(localStorage.getItem('streetwiseDataV2')||'null')||seed;
+const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
+const save=()=>localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
+function toast(t){let e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
+function nav(){let side=document.getElementById('nav'),mobile=document.getElementById('mobilebar');side.innerHTML=modules.map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span class="ico">${x[1]}</span>${x[2]}</button>`).join('');mobile.innerHTML=modules.slice(0,5).map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span>${x[1]}</span>${x[2].split(' ')[0]}</button>`).join('')}
+function show(id){document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));document.getElementById('mod-'+id)?.classList.add('active');document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('active',x.dataset.m===id));let m=modules.find(x=>x[0]===id);document.getElementById('title').textContent=m[2];document.getElementById('subtitle').textContent=id==='dashboard'?'Portfolio, commercial and site control':`Manage ${m[2].toLowerCase()}`}
+function shell(id,body){return `<section class="module ${id==='dashboard'?'active':''}" id="mod-${id}">${body}</section>`}
+function dashboard(){let budget=data.projects.reduce((a,p)=>a+p.budget,0),spent=data.projects.reduce((a,p)=>a+p.spent,0),alerts=data.materials.filter(m=>m.stock<=m.reorder).length,open=data.snags.filter(s=>s.status!=='Closed').length;return shell('dashboard',`
+<div class="grid">
+<div class="card metric"><small>Active Projects</small><div class="num">${data.projects.filter(p=>p.status==='Active').length}</div><div class="note up">● ${data.projects.length} total projects</div></div>
+<div class="card metric"><small>Portfolio Budget</small><div class="num">${money(budget)}</div><div class="note">${Math.round(spent/budget*100)}% committed/spent</div></div>
+<div class="card metric"><small>Stock Alerts</small><div class="num">${alerts}</div><div class="note ${alerts?'warn':'up'}">${alerts?'Reorder required':'Stock within levels'}</div></div>
+<div class="card metric"><small>Open Snags</small><div class="num">${open}</div><div class="note ${open?'warn':'up'}">${open?'Items require action':'No open snags'}</div></div>
+</div>
+<div class="section two">
+<div class="card"><div class="section-head"><h2>Project Control</h2><button class="btn" onclick="show('projects')">View all</button></div>
+<table><thead><tr><th>Project</th><th>Progress</th><th>Budget</th><th>Status</th></tr></thead><tbody>${data.projects.map(p=>`<tr><td><strong>${p.name}</strong><br><span class="muted">${p.location}</span></td><td><div class="bar"><i style="width:${p.progress}%"></i></div><small>${p.progress}%</small></td><td>${money(p.budget)}</td><td><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></td></tr>`).join('')}</tbody></table></div>
+<div class="card"><div class="section-head"><h2>Cost Position</h2><span class="muted">Actual spend</span></div>${data.projects.map(p=>`<div class="row"><div><strong>${p.name}</strong><div class="muted">${Math.round(p.spent/p.budget*100)}% of budget</div></div><strong>${money(p.spent)}</strong></div>`).join('')}</div>
+</div>
+<div class="section two"><div class="card"><div class="section-head"><h2>Procurement Watch</h2><button class="btn" onclick="show('procurement')">Open</button></div>${data.procurement.map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.supplier} · ${x.qty}</div></div><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></div>`).join('')}</div>
+<div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${data.expenses.slice(0,4).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.project} · ${x.date}</div></div><strong>${money(x.amount)}</strong></div>`).join('')}</div></div>`)}
+function table(id,title,headers,rows,action){return shell(id,`<div class="card"><div class="section-head"><h2>${title}</h2><div class="module-tools">${action||''}</div></div><div style="overflow:auto"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${headers.length}" class="empty">No records.</td></tr>`}</tbody></table></div></div>`)}
+function render(){let p=data.projects.map(x=>`<tr><td><strong>${x.name}</strong></td><td>${x.client}</td><td>${x.location}</td><td>${money(x.budget)}</td><td>${x.progress}%</td><td><span class="pill ${x.status==='Active'?'green':'orange'}">${x.status}</span></td></tr>`).join('');
+let b=data.boq.map(x=>`<tr><td>${x.code}</td><td><strong>${x.description}</strong></td><td>${money(x.budget)}</td><td>${money(x.actual)}</td><td class="${x.actual>x.budget?'down':'up'}">${money(x.budget-x.actual)}</td><td>${x.progress}%</td></tr>`).join('');
+let m=data.materials.map(x=>`<tr><td><strong>${x.name}</strong></td><td>${x.unit}</td><td>${x.stock}</td><td>${x.reorder}</td><td>${money(x.unitCost)}</td><td><span class="pill ${x.stock>x.reorder?'green':'red'}">${x.stock>x.reorder?'OK':'Reorder'}</span></td></tr>`).join('');
+let l=data.labour.map(x=>`<tr><td><strong>${x.trade}</strong></td><td>${x.workers}</td><td>${money(x.rate)}</td><td>${x.days}</td><td>${money(x.workers*x.rate*x.days)}</td></tr>`).join('');
+let q=data.procurement.map(x=>`<tr><td><strong>${x.item}</strong></td><td>${x.supplier}</td><td>${x.qty}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></td></tr>`).join('');
+let pr=data.projects.map(x=>`<tr><td><strong>${x.name}</strong></td><td style="min-width:110px"><div class="bar"><i style="width:${x.progress}%"></i></div><small>${x.progress}%</small></td><td>${money(x.budget)}</td><td>${money(x.spent)}</td><td>${Math.round(x.spent/x.budget*100)}%</td></tr>`).join('');
+let v=data.variations.map(x=>`<tr><td>${x.ref}</td><td>${x.project}</td><td>${x.description}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Approved'?'green':'orange'}">${x.status}</span></td></tr>`).join('');
+let r=data.reports.map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.type}</td><td>${x.author}</td><td><span class="pill green">${x.status}</span></td></tr>`).join('');
+let s=data.snags.map(x=>`<tr><td>${x.id}</td><td>${x.project}</td><td>${x.item}</td><td><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></td><td>${x.status}</td></tr>`).join('');
+let e=data.expenses.map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.category}</td><td>${x.description}</td><td><strong>${money(x.amount)}</strong></td></tr>`).join('');
+document.getElementById('modules').innerHTML=[dashboard(),table('projects','Projects',['Project','Client','Location','Budget','Progress','Status'],p,`<button class="btn primary" onclick="openModal('project')">+ Project</button>`),table('boq','BOQ & Cost Control',['Code','Description','Budget','Actual','Variance','Progress'],b,`<button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),table('materials','Materials & Stock',['Material','Unit','Stock','Reorder','Unit Cost','Status'],m,`<button class="btn primary" onclick="openModal('material')">+ Material</button>`),table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),table('procurement','Procurement',['Item','Supplier','Quantity','Value','Status'],q,`<button class="btn primary" onclick="openModal('procurement')">+ Purchase</button>`),table('progress','Progress Tracking',['Project','Progress','Budget','Spent','Spend %'],pr,`<button class="btn primary" onclick="openModal('progress')">+ Update</button>`),table('variations','Variations',['Reference','Project','Description','Value','Status'],v,`<button class="btn primary" onclick="openModal('variation')">+ Variation</button>`),table('reports','Site Reports',['Date','Project','Type','Author','Status'],r,`<button class="btn primary" onclick="openModal('report')">+ Report</button>`),table('snags','Snagging',['ID','Project','Item','Priority','Status'],s,`<button class="btn primary" onclick="openModal('snag')">+ Snag</button>`),table('expenses','Expenses / Petty Cash',['Date','Project','Category','Description','Amount'],e,`<button class="btn primary" onclick="openModal('expense')">+ Expense</button>`)].join('')}
+const opts=()=>data.projects.map(p=>`<option>${p.name}</option>`).join('');
+function openModal(t){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';
+if(t==='project')h=`<div class="form"><label>Project name<input id="f1" placeholder="e.g. Karen Villas"></label><label>Client<input id="f2"></label><label>Location<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('project')">Create Project</button></div>`;
+if(t==='boq')h=`<div class="form"><label>Code<input id="f1"></label><label>Description<input id="f2"></label><label>Budget (KES)<input id="f3" type="number"></label><label>Actual (KES)<input id="f4" type="number" value="0"></label><label>Progress %<input id="f5" type="number" value="0"></label><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
+if(t==='material')h=`<div class="form"><label>Material<input id="f1"></label><label>Unit<input id="f2"></label><label>Stock<input id="f3" type="number"></label><label>Reorder level<input id="f4" type="number"></label><label>Unit cost (KES)<input id="f5" type="number"></label><button class="btn primary" onclick="add('material')">Add Material</button></div>`;
+if(t==='labour')h=`<div class="form"><label>Trade<input id="f1"></label><label>Workers<input id="f2" type="number"></label><label>Daily rate (KES)<input id="f3" type="number"></label><label>Days<input id="f4" type="number"></label><button class="btn primary" onclick="add('labour')">Add Record</button></div>`;
+if(t==='procurement')h=`<div class="form"><label>Item<input id="f1"></label><label>Supplier<input id="f2"></label><label>Quantity<input id="f3"></label><label>Value (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Pending</option><option>Ordered</option><option>Delivered</option></select></label><button class="btn primary" onclick="add('procurement')">Add Purchase</button></div>`;
+if(t==='progress')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Progress %<input id="f2" type="number"></label><label>Spent to date (KES)<input id="f3" type="number"></label><button class="btn primary" onclick="add('progress')">Update Project</button></div>`;
+if(t==='variation')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Value (KES)<input id="f3" type="number"></label><label>Status<select id="f4"><option>Submitted</option><option>Approved</option><option>Rejected</option></select></label><button class="btn primary" onclick="add('variation')">Add Variation</button></div>`;
+if(t==='report')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Type<select id="f2"><option>Daily Site Report</option><option>Weekly Progress</option><option>Inspection Report</option><option>Meeting Minutes</option></select></label><label>Author<input id="f3" value="Site Team"></label><button class="btn primary" onclick="add('report')">Create Report</button></div>`;
+if(t==='snag')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Priority<select id="f3"><option>High</option><option>Medium</option><option>Low</option></select></label><button class="btn primary" onclick="add('snag')">Add Snag</button></div>`;
+if(t==='expense')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Category<select id="f2"><option>Petty Cash</option><option>Transport</option><option>Site</option><option>Tools</option><option>Other</option></select></label><label>Description<input id="f3"></label><label>Amount (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('expense')">Add Expense</button></div>`;
+document.getElementById('modalBody').innerHTML=h;document.getElementById('modal').classList.add('open')}
+function closeModal(){document.getElementById('modal').classList.remove('open')}const v=i=>document.getElementById(i).value;
+function add(t){let today=new Date().toISOString().slice(0,10);
+if(t==='project')data.projects.push({id:Date.now(),name:v('f1'),client:v('f2'),location:v('f3'),budget:+v('f4'),spent:0,progress:0,status:'Active'});
+if(t==='boq')data.boq.push({code:v('f1'),description:v('f2'),budget:+v('f3'),actual:+v('f4'),progress:+v('f5')});
+if(t==='material')data.materials.push({name:v('f1'),unit:v('f2'),stock:+v('f3'),reorder:+v('f4'),unitCost:+v('f5')});
+if(t==='labour')data.labour.push({trade:v('f1'),workers:+v('f2'),rate:+v('f3'),days:+v('f4')});
+if(t==='procurement')data.procurement.push({item:v('f1'),supplier:v('f2'),qty:v('f3'),value:+v('f4'),status:v('f5')});
+if(t==='progress'){let p=data.projects.find(x=>x.name===v('f1'));if(p){p.progress=+v('f2');p.spent=+v('f3')}}
+if(t==='variation')data.variations.push({ref:'VO-'+String(data.variations.length+1).padStart(3,'0'),project:v('f1'),description:v('f2'),value:+v('f3'),status:v('f4')});
+if(t==='report')data.reports.unshift({date:today,project:v('f1'),type:v('f2'),author:v('f3'),status:'Submitted'});
+if(t==='snag')data.snags.unshift({id:'SN-'+String(data.snags.length+17).padStart(3,'0'),project:v('f1'),item:v('f2'),priority:v('f3'),status:'Open'});
+if(t==='expense')data.expenses.unshift({date:today,project:v('f1'),category:v('f2'),description:v('f3'),amount:+v('f4')});
+save();closeModal();render();show('dashboard');toast('Saved successfully')}
+function exportData(){let b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='streetwise-data.json';a.click();toast('Data exported')}
+let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBtn').classList.add('show')});
+async function installApp(){if(!deferredPrompt){toast('Use your browser menu to install this app');return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBtn').classList.remove('show')}
+window.addEventListener('appinstalled',()=>toast('Streetwise installed'));
+nav();render();show('dashboard');if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js');
+</script>
+</body></html>

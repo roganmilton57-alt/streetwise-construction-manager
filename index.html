@@ -110,7 +110,7 @@ document.getElementById('modules').innerHTML=[dashboard(),table('projects','Proj
 const opts=()=>data.projects.map(p=>`<option>${p.name}</option>`).join('');
 function openModal(t){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';
 if(t==='project')h=`<div class="form"><label>Project name<input id="f1" placeholder="e.g. Karen Villas"></label><label>Client<input id="f2"></label><label>Location<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('project')">Create Project</button></div>`;
-if(t==='boq')h=`<div class="form"><label>Code<input id="f1"></label><label>Description<input id="f2"></label><label>Budget (KES)<input id="f3" type="number"></label><label>Actual (KES)<input id="f4" type="number" value="0"></label><label>Progress %<input id="f5" type="number" value="0"></label><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
+if(t==='boq')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Code<input id="f2"></label><label>Description<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><label>Actual (KES)<input id="f5" type="number" value="0"></label><label>Progress %<input id="f6" type="number" value="0"></label><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
 if(t==='material')h=`<div class="form"><label>Material<input id="f1"></label><label>Unit<input id="f2"></label><label>Stock<input id="f3" type="number"></label><label>Reorder level<input id="f4" type="number"></label><label>Unit cost (KES)<input id="f5" type="number"></label><button class="btn primary" onclick="add('material')">Add Material</button></div>`;
 if(t==='labour')h=`<div class="form"><label>Trade<input id="f1"></label><label>Workers<input id="f2" type="number"></label><label>Daily rate (KES)<input id="f3" type="number"></label><label>Days<input id="f4" type="number"></label><button class="btn primary" onclick="add('labour')">Add Record</button></div>`;
 if(t==='procurement')h=`<div class="form"><label>Item<input id="f1"></label><label>Supplier<input id="f2"></label><label>Quantity<input id="f3"></label><label>Value (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Pending</option><option>Ordered</option><option>Delivered</option></select></label><button class="btn primary" onclick="add('procurement')">Add Purchase</button></div>`;
@@ -158,13 +158,46 @@ async function add(t){
     data.projects.push(project);
   }
 
-  if(t==='boq')data.boq.push({
-    code:v('f1'),
-    description:v('f2'),
-    budget:+v('f3'),
-    actual:+v('f4'),
-    progress:+v('f5')
-  });
+  if(t==='boq'){
+    const projectName=v('f1');
+    const project=data.projects.find(x=>x.name===projectName);
+    const item={
+      project:projectName,
+      project_id:project?.db_id||project?.id||null,
+      code:v('f2'),
+      description:v('f3'),
+      budget:+v('f4'),
+      actual:+v('f5'),
+      progress:+v('f6')
+    };
+
+    if(cloudReady && currentCompany){
+      if(!item.project_id){
+        toast('Select a valid project first');
+        return;
+      }
+
+      const r=await sb.from('boq_items').insert({
+        company_id:currentCompany.company_id,
+        project_id:item.project_id,
+        code:item.code,
+        description:item.description,
+        budget:item.budget,
+        actual:item.actual,
+        progress:item.progress,
+        created_by:currentUser.id
+      }).select('id').single();
+
+      if(r.error){
+        toast('BOQ database save failed: '+r.error.message);
+        return;
+      }
+
+      item.db_id=r.data.id;
+    }
+
+    data.boq.push(item);
+  }
 
   if(t==='material')data.materials.push({
     name:v('f1'),
@@ -309,6 +342,29 @@ async function loadCloudWorkspace(){
     status:x.status||'Active',
     start_date:x.start_date,
     end_date:x.end_date
+  }));
+
+  const b=await sb.from('boq_items')
+    .select('id,project_id,code,description,budget,actual,progress')
+    .eq('company_id',currentCompany.company_id)
+    .order('created_at',{ascending:true});
+
+  if(b.error){
+    cloudLoadError='BOQ database load failed: '+b.error.message;
+    return false;
+  }
+
+  const projectNames=new Map(data.projects.map(x=>[x.db_id,x.name]));
+  data.boq=(b.data||[]).map(x=>({
+    id:x.id,
+    db_id:x.id,
+    project_id:x.project_id,
+    project:projectNames.get(x.project_id)||'',
+    code:x.code||'',
+    description:x.description||'',
+    budget:Number(x.budget||0),
+    actual:Number(x.actual||0),
+    progress:Number(x.progress||0)
   }));
 
   localStorage.setItem('streetwiseDataV2',JSON.stringify(data));

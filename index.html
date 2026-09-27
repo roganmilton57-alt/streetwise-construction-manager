@@ -166,7 +166,7 @@ function render(){
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
 let p=visibleProjects.map(x=>`<tr onclick="openProject('${x.db_id||x.id}')" style="cursor:pointer"><td><strong>${x.name}</strong></td><td>${x.client}</td><td>${x.location}</td><td>${money(x.budget)}</td><td>${x.progress||0}%</td><td><span class="pill ${x.status==='Active'?'green':'orange'}">${x.status}</span></td></tr>`).join('');
 let b=projectRows(data.boq).map(x=>`<tr><td>${x.project||''}</td><td>${x.code}</td><td><strong>${x.description}</strong></td><td>${money(x.budget)}</td><td>${money(x.actual)}</td><td class="${x.actual>x.budget?'down':'up'}">${money(x.budget-x.actual)}</td><td>${x.progress}%</td></tr>`).join('');
-let m=data.materials.map(x=>`<tr><td><strong>${x.name}</strong></td><td>${x.unit}</td><td>${x.stock}</td><td>${x.reorder}</td><td>${money(x.unitCost)}</td><td><span class="pill ${x.stock>x.reorder?'green':'red'}">${x.stock>x.reorder?'OK':'Reorder'}</span></td></tr>`).join('');
+let m=data.materials.map(x=>`<tr><td>${x.project||'General / Company Stock'}</td><td><strong>${x.name}</strong></td><td>${x.unit}</td><td>${x.stock}</td><td>${x.reorder}</td><td>${money(x.unitCost)}</td><td><span class="pill ${x.stock>x.reorder?'green':'red'}">${x.stock>x.reorder?'OK':'Reorder'}</span></td></tr>`).join('');
 let l=data.labour.map(x=>`<tr><td><strong>${x.trade}</strong></td><td>${x.workers}</td><td>${money(x.rate)}</td><td>${x.days}</td><td>${money(x.workers*x.rate*x.days)}</td></tr>`).join('');
 let q=projectRows(data.procurement).map(x=>`<tr><td><strong>${x.item}</strong></td><td>${x.supplier}</td><td>${x.qty}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></td></tr>`).join('');
 let pr=visibleProjects.map(x=>`<tr><td><strong>${x.name}</strong></td><td style="min-width:110px"><div class="bar"><i style="width:${x.progress||0}%"></i></div><small>${x.progress||0}%</small></td><td>${money(x.budget)}</td><td>${money(x.spent)}</td><td>${x.budget?Math.round((x.spent||0)/x.budget*100):0}%</td></tr>`).join('');
@@ -179,7 +179,7 @@ document.getElementById('modules').innerHTML=[
 dashboard(),
 table('projects','Projects',['Project','Client','Location','Budget','Progress','Status'],p,`<button class="btn primary" onclick="openModal('project')">+ Project</button>`),
 table('boq','BOQ & Cost Control',['Project','Code','Description','Budget','Actual','Variance','Progress'],b,`<button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
-table('materials','Materials & Stock',['Material','Unit','Stock','Reorder','Unit Cost','Status'],m,`<button class="btn primary" onclick="openModal('material')">+ Material</button>`),
+table('materials','Materials & Stock',['Project','Material','Unit','Stock','Reorder','Unit Cost','Status'],m,`<button class="btn primary" onclick="openModal('material')">+ Material</button>`),
 table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),
 table('procurement','Procurement',['Item','Supplier','Quantity','Value','Status'],q,`${scopedNote}<button class="btn primary" onclick="openModal('procurement')">+ Purchase</button>`),
 table('progress','Progress Tracking',['Project','Progress','Budget','Spent','Spend %'],pr,`<button class="btn primary" onclick="openModal('progress')">+ Update</button>`),
@@ -195,7 +195,7 @@ const opts=()=>data.projects.map(p=>`<option>${p.name}</option>`).join('');
 function openModal(t){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';
 if(t==='project')h=`<div class="form"><label>Project name<input id="f1" placeholder="e.g. Karen Villas"></label><label>Client<input id="f2"></label><label>Location<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('project')">Create Project</button></div>`;
 if(t==='boq')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Code<input id="f2"></label><label>Description<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><label>Actual (KES)<input id="f5" type="number" value="0"></label><label>Progress %<input id="f6" type="number" value="0"></label><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
-if(t==='material')h=`<div class="form"><label>Material<input id="f1"></label><label>Unit<input id="f2"></label><label>Stock<input id="f3" type="number"></label><label>Reorder level<input id="f4" type="number"></label><label>Unit cost (KES)<input id="f5" type="number"></label><button class="btn primary" onclick="add('material')">Add Material</button></div>`;
+if(t==='material')h=`<div class="form"><label>Project<select id="f1"><option value="">General / Company Stock</option>${opts()}</select></label><label>Material<input id="f2"></label><label>Unit<input id="f3"></label><label>Stock<input id="f4" type="number"></label><label>Reorder level<input id="f5" type="number"></label><label>Unit cost (KES)<input id="f6" type="number"></label><button class="btn primary" onclick="add('material')">Add Material</button></div>`;
 if(t==='labour')h=`<div class="form"><label>Trade<input id="f1"></label><label>Workers<input id="f2" type="number"></label><label>Daily rate (KES)<input id="f3" type="number"></label><label>Days<input id="f4" type="number"></label><button class="btn primary" onclick="add('labour')">Add Record</button></div>`;
 if(t==='procurement')h=`<div class="form"><label>Item<input id="f1"></label><label>Supplier<input id="f2"></label><label>Quantity<input id="f3"></label><label>Value (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Pending</option><option>Ordered</option><option>Delivered</option></select></label><button class="btn primary" onclick="add('procurement')">Add Purchase</button></div>`;
 if(t==='progress')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Progress %<input id="f2" type="number"></label><label>Spent to date (KES)<input id="f3" type="number"></label><button class="btn primary" onclick="add('progress')">Update Project</button></div>`;
@@ -283,13 +283,38 @@ async function add(t){
     data.boq.push(item);
   }
 
-  if(t==='material')data.materials.push({
-    name:v('f1'),
-    unit:v('f2'),
-    stock:+v('f3'),
-    reorder:+v('f4'),
-    unitCost:+v('f5')
-  });
+  if(t==='material'){
+    const projectName=v('f1');
+    const project=data.projects.find(x=>x.name===projectName);
+    const item={
+      project:projectName||'General / Company Stock',
+      project_id:project?.db_id||project?.id||null,
+      name:v('f2'),
+      unit:v('f3'),
+      stock:+v('f4'),
+      reorder:+v('f5'),
+      unitCost:+v('f6')
+    };
+
+    if(cloudReady && currentCompany){
+      const r=await sb.from('material_records').insert({
+        company_id:currentCompany.company_id,
+        project_id:item.project_id,
+        name:item.name,
+        unit:item.unit,
+        stock:item.stock,
+        reorder:item.reorder,
+        unit_cost:item.unitCost,
+        created_by:currentUser.id
+      }).select('id').single();
+      if(r.error){
+        toast('Material database save failed: '+r.error.message);
+        return;
+      }
+      item.db_id=r.data.id;
+    }
+    data.materials.push(item);
+  }
 
   if(t==='labour')data.labour.push({
     trade:v('f1'),
@@ -358,7 +383,7 @@ async function installApp(){if(!deferredPrompt){toast('Use your browser menu to 
 window.addEventListener('appinstalled',()=>toast('Streetwise installed'));
 async function boot(){
   nav(); render(); show('dashboard');
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=3');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=4');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');
@@ -449,6 +474,55 @@ async function loadCloudWorkspace(){
     budget:Number(x.budget||0),
     actual:Number(x.actual||0),
     progress:Number(x.progress||0)
+  }));
+
+  const m=await sb.from('material_records')
+    .select('id,project_id,name,unit,stock,reorder,unit_cost')
+    .eq('company_id',currentCompany.company_id)
+    .order('created_at',{ascending:true});
+
+  if(m.error){
+    cloudLoadError='Materials database load failed: '+m.error.message;
+    return false;
+  }
+
+  if(!(m.data||[]).length && Array.isArray(data.materials) && data.materials.length){
+    const legacyRows=data.materials.map(x=>({
+      company_id:currentCompany.company_id,
+      project_id:x.project_id||null,
+      name:x.name||'',
+      unit:x.unit||'',
+      stock:Number(x.stock||0),
+      reorder:Number(x.reorder||0),
+      unit_cost:Number(x.unitCost||x.unit_cost||0),
+      created_by:currentUser.id
+    }));
+    const mig=await sb.from('material_records').insert(legacyRows);
+    if(mig.error){
+      cloudLoadError='Materials migration failed: '+mig.error.message;
+      return false;
+    }
+    const refreshed=await sb.from('material_records')
+      .select('id,project_id,name,unit,stock,reorder,unit_cost')
+      .eq('company_id',currentCompany.company_id)
+      .order('created_at',{ascending:true});
+    if(refreshed.error){
+      cloudLoadError='Materials database reload failed: '+refreshed.error.message;
+      return false;
+    }
+    m.data=refreshed.data||[];
+  }
+
+  data.materials=(m.data||[]).map(x=>({
+    id:x.id,
+    db_id:x.id,
+    project_id:x.project_id,
+    project:projectNames.get(x.project_id)||'General / Company Stock',
+    name:x.name||'',
+    unit:x.unit||'',
+    stock:Number(x.stock||0),
+    reorder:Number(x.reorder||0),
+    unitCost:Number(x.unit_cost||0)
   }));
 
   localStorage.setItem('streetwiseDataV2',JSON.stringify(data));

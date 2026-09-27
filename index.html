@@ -74,18 +74,6 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 <script>
 const modules=[['dashboard','📊','Dashboard'],['projects','🏗️','Projects'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
 const emptyWorkspace={projects:[],materials:[],labour:[],boq:[],procurement:[],variations:[],expenses:[],snags:[],reports:[]};
-const demoSeed={projects:[
-{id:1,name:'Kilimani Apartments',client:'Mavuno Developments',status:'Active',budget:48500000,spent:18350000,progress:38,location:'Nairobi'},
-{id:2,name:'Ruiru Warehouse',client:'Eastline Logistics',status:'Active',budget:22100000,spent:9100000,progress:44,location:'Ruiru'},
-{id:3,name:'Westlands Office Fit-out',client:'Private Client',status:'On Hold',budget:12700000,spent:4600000,progress:31,location:'Westlands'}],
-materials:[{name:'Cement 32.5R',unit:'Bags',stock:820,reorder:300,unitCost:760},{name:'12mm Reinforcement',unit:'Tonnes',stock:18.4,reorder:8,unitCost:132000},{name:'Machine-cut stone',unit:'m³',stock:42,reorder:20,unitCost:5200},{name:'Ballast',unit:'m³',stock:31,reorder:15,unitCost:4100}],
-labour:[{trade:'Masons',workers:12,rate:1800,days:23},{trade:'Steel Fixers',workers:8,rate:2100,days:21},{trade:'Carpenters',workers:10,rate:2000,days:22},{trade:'General Labour',workers:18,rate:1300,days:24}],
-boq:[{code:'A01',description:'Preliminaries',budget:3200000,actual:2980000,progress:92},{code:'B02',description:'Substructure',budget:9800000,actual:8420000,progress:86},{code:'C03',description:'Frame & Slab',budget:15400000,actual:4950000,progress:32},{code:'D04',description:'Masonry',budget:7200000,actual:1200000,progress:17}],
-procurement:[{item:'12mm Reinforcement',supplier:'SteelHub',qty:'8 t',value:1056000,status:'Ordered'},{item:'Cement 32.5R',supplier:'BuildMart',qty:'500 bags',value:380000,status:'Delivered'},{item:'Timber 4x2',supplier:'Timberline',qty:'1,200 lm',value:276000,status:'Pending'}],
-variations:[{ref:'VO-001',project:'Kilimani Apartments',description:'Additional drainage works',value:680000,status:'Submitted'},{ref:'VO-002',project:'Ruiru Warehouse',description:'Door schedule revision',value:420000,status:'Approved'}],
-expenses:[{date:'2026-09-25',project:'Kilimani Apartments',category:'Petty Cash',description:'Minor tools',amount:18400},{date:'2026-09-24',project:'Ruiru Warehouse',category:'Transport',description:'Material delivery',amount:27500},{date:'2026-09-22',project:'Kilimani Apartments',category:'Site',description:'Printing & stationery',amount:6200}],
-snags:[{id:'SN-014',project:'Kilimani Apartments',item:'Repair plaster cracks — Block A',priority:'High',status:'Open'},{id:'SN-015',project:'Ruiru Warehouse',item:'Adjust loading bay door',priority:'Medium',status:'Assigned'},{id:'SN-016',project:'Kilimani Apartments',item:'Replace damaged tile',priority:'Low',status:'Closed'}],
-reports:[{date:'2026-09-25',project:'Kilimani Apartments',type:'Daily Site Report',author:'Site Team',status:'Submitted'},{date:'2026-09-24',project:'Ruiru Warehouse',type:'Weekly Progress',author:'PM',status:'Submitted'}]};
 let data=JSON.parse(localStorage.getItem('streetwiseDataV2')||'null')||structuredClone(emptyWorkspace);let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false;
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
 let save=()=>localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
@@ -151,7 +139,7 @@ async function installApp(){if(!deferredPrompt){toast('Use your browser menu to 
 window.addEventListener('appinstalled',()=>toast('Streetwise installed'));
 async function boot(){
   nav(); render(); show('dashboard');
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=3');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

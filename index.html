@@ -38,7 +38,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 <aside class="sidebar">
  <div class="brand"><div class="logo">SW</div><div><b>STREETWISE</b><small>Construction Manager</small></div></div>
  <nav class="nav" id="nav"></nav>
- <div class="sidefoot">Prototype v2 · Offline-ready PWA</div>
+ <div class="sidefoot">Commercial Cloud · Project Control</div>
 </aside>
 <main class="main">
  <header class="top">
@@ -72,7 +72,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
   </div>
 </div>
 <script>
-const modules=[['dashboard','📊','Dashboard'],['projects','🏗️','Projects'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
+const modules=[['projects','🏗️','My Projects'],['dashboard','📊','Company Overview'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
 const emptyWorkspace={projects:[],materials:[],labour:[],boq:[],procurement:[],variations:[],expenses:[],snags:[],reports:[]};
 let data=structuredClone(emptyWorkspace);let currentProjectId=null;let currentModuleId='dashboard';let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false, cloudLoadError='';
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
@@ -89,7 +89,7 @@ function show(id){
   const cp=currentProject();
   document.getElementById('subtitle').textContent=cp
     ? `${cp.name} · Project workspace`
-    : (id==='dashboard'?'Portfolio, commercial and site control':`Manage ${m[2].toLowerCase()}`);
+    : (id==='dashboard'?'Portfolio, commercial and site control':id==='projects'?'Select a project to open its workspace':`Manage ${m[2].toLowerCase()}`);
   updateProjectContext();
 } 
 function currentProject(){return data.projects.find(p=>String(p.db_id||p.id)===String(currentProjectId))||null}
@@ -125,6 +125,27 @@ function enterProject(id){currentProjectId=id;show('dashboard');render();toast('
 function clearProject(){currentProjectId=null;show('projects');render();toast('Showing all projects')}
 function projectSelector(){return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:11px;font-weight:800;color:var(--muted)">PROJECT <select onchange="selectProject(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff"><option value="">All Projects</option>${data.projects.map(p=>`<option value="${p.db_id}" ${currentProjectId===p.db_id?'selected':''}>${p.name}</option>`).join('')}</select></label>${currentProjectId?`<button class="btn" onclick="clearProject()">← All Projects</button>`:''}</div>`}
 function selectProject(id){currentProjectId=id||null;render();show(currentProjectId?'dashboard':'projects')}
+function projectsHome(){
+  const cards=data.projects.map(p=>{
+    const s=projectBoqStats(p.db_id||p.id);
+    const actual=projectActualCost(p.db_id||p.id);
+    const openSnags=data.snags.filter(x=>String(x.project_id||'')===String(p.db_id||p.id)||String(x.project||'')===String(p.name)).filter(x=>x.status!=='Closed').length;
+    return `<div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <div class="section-head" style="margin-bottom:0"><div><div class="eyebrow">Project</div><h2 style="margin:4px 0;font-size:18px">${p.name}</h2><div class="muted">${p.client||'No client'}${p.location?` · ${p.location}`:''}</div></div><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></div>
+      <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px">
+        <div><small class="muted">BOQ Budget</small><div style="font-weight:800;margin-top:3px">${money(s.budget)}</div></div>
+        <div><small class="muted">Actual Cost</small><div style="font-weight:800;margin-top:3px">${money(actual)}</div></div>
+        <div><small class="muted">Progress</small><div style="font-weight:800;margin-top:3px">${formatPct(s.progress)}</div></div>
+      </div>
+      <div><div class="bar"><i style="width:${Math.min(100,Math.max(0,s.progress))}%"></i></div></div>
+      <div class="row" style="padding-bottom:0"><span>${s.rows.length} BOQ items · ${openSnags} open snag${openSnags===1?'':'s'}</span><button class="btn primary" onclick="openProject('${p.db_id||p.id}')">Open Project</button></div>
+    </div>`;
+  }).join('');
+  return shell('projects',`
+    <div class="section-head"><div><div class="eyebrow">Workspace</div><h2 style="margin:4px 0;font-size:20px">My Projects</h2><div class="muted">Choose a project to access its construction modules and controls.</div></div><button class="btn primary" onclick="openModal('project')">+ New Project</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:13px">${cards||'<div class="card empty" style="grid-column:1/-1">No projects yet. Create your first project to get started.</div>'}</div>
+  `);
+}
 function dashboard(){
 if(currentProjectId){
  const p=selectedProject();
@@ -213,7 +234,7 @@ let e=projectRows(data.expenses).map(x=>`<tr><td>${x.date}</td><td>${x.project}<
 const scopedNote=currentProject()?`<span class="muted">Showing ${currentProject().name}</span>`:'';
 document.getElementById('modules').innerHTML=[
 dashboard(),
-table('projects','Projects',['Project','Client','Location','Budget','Progress','Status','Actions'],p,`<button class="btn primary" onclick="openModal('project')">+ Project</button>`),
+projectsHome(),
 table('boq','BOQ & Cost Control',['Project','Item','Description','Unit','Qty','Rate','Amount','Actual Cost','Variance','% Complete','Work Value','Actions'],b,`<button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
 table('materials','Materials & Stock',['Date','Project','Material','Unit','Qty Received','Unit Cost','Total Cost','Qty Used','Balance','Supplier','Notes','Actions'],m,`<button class="btn primary" onclick="openModal('material')">+ Material</button>`),
 table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost','Actions'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),
@@ -494,7 +515,7 @@ let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.prev
 async function installApp(){if(!deferredPrompt){toast('Use your browser menu to install this app');return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBtn').classList.remove('show')}
 window.addEventListener('appinstalled',()=>toast('Streetwise installed'));
 async function boot(){
-  nav(); render(); show('dashboard');
+  nav(); render(); show('projects');
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=5');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
@@ -508,8 +529,8 @@ function setAuthStatus(t){const e=document.getElementById('authStatus'); if(e)e.
 function showAuth(v){document.getElementById('authScreen').style.display=v?'flex':'none'; if(v) document.getElementById('companyScreen').style.display='none'}
 function toggleAuthMode(){authMode=authMode==='signin'?'signup':'signin';document.getElementById('authTitle').textContent=authMode==='signin'?'Sign in':'Create your account';document.getElementById('authSub').textContent=authMode==='signin'?'Access your construction projects from phone or PC.':'Create the first user account for your Streetwise company.';document.getElementById('nameWrap').style.display=authMode==='signup'?'grid':'none';document.getElementById('authSubmit').textContent=authMode==='signin'?'Sign in':'Create account';document.getElementById('authToggle').textContent=authMode==='signin'?'Create an account':'Back to sign in';setAuthStatus('')}
 async function submitAuth(){if(!sb){setAuthStatus('Supabase is not configured.');return}const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value,name=document.getElementById('authName').value.trim();if(!email||!password){setAuthStatus('Enter email and password.');return}setAuthStatus('Working…');let r;if(authMode==='signup')r=await sb.auth.signUp({email,password,options:{data:{full_name:name}}});else r=await sb.auth.signInWithPassword({email,password});if(r.error){setAuthStatus(r.error.message);return}if(authMode==='signup'&&!r.data.session){setAuthStatus('Account created. Check your email to confirm, then sign in.');return}if(r.data.user)await onSignedIn(r.data.user)}
-async function onSignedIn(user){currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);const r=await sb.rpc('my_companies');if(r.error){showAuth(true);setAuthStatus(r.error.message);return}if(!r.data?.length){document.getElementById('companyScreen').style.display='flex';return}currentCompany=r.data[0];const ok=await loadCloudWorkspace();if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}cloudReady=true;document.getElementById('companyScreen').style.display='none';document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Cloud workspace connected')}
-async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;document.getElementById('companyScreen').style.display='none';document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
+async function onSignedIn(user){currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);const r=await sb.rpc('my_companies');if(r.error){showAuth(true);setAuthStatus(r.error.message);return}if(!r.data?.length){document.getElementById('companyScreen').style.display='flex';return}currentCompany=r.data[0];const ok=await loadCloudWorkspace();if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Cloud workspace connected')}
+async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
 async function loadCloudWorkspace(){
   cloudLoadError='';
 

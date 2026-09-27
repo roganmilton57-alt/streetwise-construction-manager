@@ -256,7 +256,65 @@ function toggleAuthMode(){authMode=authMode==='signin'?'signup':'signin';documen
 async function submitAuth(){if(!sb){setAuthStatus('Supabase is not configured.');return}const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value,name=document.getElementById('authName').value.trim();if(!email||!password){setAuthStatus('Enter email and password.');return}setAuthStatus('Working…');let r;if(authMode==='signup')r=await sb.auth.signUp({email,password,options:{data:{full_name:name}}});else r=await sb.auth.signInWithPassword({email,password});if(r.error){setAuthStatus(r.error.message);return}if(authMode==='signup'&&!r.data.session){setAuthStatus('Account created. Check your email to confirm, then sign in.');return}if(r.data.user)await onSignedIn(r.data.user)}
 async function onSignedIn(user){currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);const r=await sb.rpc('my_companies');if(r.error){showAuth(true);setAuthStatus(r.error.message);return}if(!r.data?.length){document.getElementById('companyScreen').style.display='flex';return}currentCompany=r.data[0];const ok=await loadCloudWorkspace();if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}cloudReady=true;document.getElementById('companyScreen').style.display='none';document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Cloud workspace connected')}
 async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;document.getElementById('companyScreen').style.display='none';document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
-async function loadCloudWorkspace(){cloudLoadError='';const r=await sb.from('workspace_data').select('payload').eq('company_id',currentCompany.company_id).maybeSingle();if(r.error){cloudLoadError=r.error.message;return false}if(r.data?.payload && Object.keys(r.data.payload).length){data=r.data.payload}else{data=structuredClone(emptyWorkspace);const w=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:data,updated_by:currentUser.id,updated_at:new Date().toISOString()});if(w.error){cloudLoadError=w.error.message;return false}}localStorage.setItem('streetwiseDataV2',JSON.stringify(data));render();return true}
+async function loadCloudWorkspace(){
+  cloudLoadError='';
+
+  const r=await sb.from('workspace_data')
+    .select('payload')
+    .eq('company_id',currentCompany.company_id)
+    .maybeSingle();
+
+  if(r.error){
+    cloudLoadError=r.error.message;
+    return false;
+  }
+
+  if(r.data?.payload && Object.keys(r.data.payload).length){
+    data=r.data.payload;
+  }else{
+    data=structuredClone(emptyWorkspace);
+
+    const w=await sb.from('workspace_data').upsert({
+      company_id:currentCompany.company_id,
+      payload:data,
+      updated_by:currentUser.id,
+      updated_at:new Date().toISOString()
+    });
+
+    if(w.error){
+      cloudLoadError=w.error.message;
+      return false;
+    }
+  }
+
+  const p=await sb.from('project_records')
+    .select('id,name,client,location,status,start_date,end_date,contract_value')
+    .eq('company_id',currentCompany.company_id)
+    .order('created_at',{ascending:true});
+
+  if(p.error){
+    cloudLoadError='Project database load failed: '+p.error.message;
+    return false;
+  }
+
+  data.projects=(p.data||[]).map(x=>({
+    id:x.id,
+    db_id:x.id,
+    name:x.name,
+    client:x.client||'',
+    location:x.location||'',
+    budget:Number(x.contract_value||0),
+    spent:0,
+    progress:0,
+    status:x.status||'Active',
+    start_date:x.start_date,
+    end_date:x.end_date
+  }));
+
+  localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
+  render();
+  return true;
+}
 async function persistCloud(){if(!cloudReady||!currentCompany)return false;const r=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:data,updated_by:currentUser.id,updated_at:new Date().toISOString()});if(r.error){toast('Cloud save failed: '+r.error.message);return false}localStorage.setItem('streetwiseDataV2',JSON.stringify(data));return true}
 async function signOut(){if(sb)await sb.auth.signOut();currentUser=null;currentCompany=null;cloudReady=false;data=structuredClone(emptyWorkspace);localStorage.removeItem('streetwiseDataV2');showAuth(true)}
 save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing was saved.');return false}persistCloud();return true};

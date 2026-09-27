@@ -119,8 +119,7 @@ function openProject(id){
 }
 
 function shell(id,body){return `<section class="module ${id==='dashboard'?'active':''}" id="mod-${id}">${body}</section>`}
-function selectedProject(){return currentProjectId?data.projects.find(p=>p.db_id===currentProjectId||p.id===currentProjectId):null}
-function projectRows(arr){const p=selectedProject();return p?arr.filter(x=>x.project_id===p.db_id||x.project===p.name):arr}
+function selectedProject(){return currentProject()}
 function enterProject(id){currentProjectId=id;show('dashboard');render();toast('Project workspace opened')}
 function clearProject(){currentProjectId=null;show('projects');render();toast('Showing all projects')}
 function projectSelector(){return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:11px;font-weight:800;color:var(--muted)">PROJECT <select onchange="selectProject(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff"><option value="">All Projects</option>${data.projects.map(p=>`<option value="${p.db_id}" ${currentProjectId===p.db_id?'selected':''}>${p.name}</option>`).join('')}</select></label>${currentProjectId?`<button class="btn" onclick="clearProject()">← All Projects</button>`:''}</div>`}
@@ -130,23 +129,24 @@ if(currentProjectId){
  const p=selectedProject();
  if(!p){currentProjectId=null;return dashboard()}
  const boq=projectRows(data.boq), vars=projectRows(data.variations), reps=projectRows(data.reports), snags=projectRows(data.snags), exps=projectRows(data.expenses);
- const budget=boq.reduce((a,x)=>a+(+x.budget||0),0), actual=boq.reduce((a,x)=>a+(+x.actual||0),0), open=snags.filter(s=>s.status!=='Closed').length, spent=p.spent||actual;
+ const stats=projectBoqStats(p.db_id||p.id), budget=stats.budget, actual=stats.actual, physical=stats.progress, open=snags.filter(s=>s.status!=='Closed').length, spent=actual;
  return shell('dashboard',`${projectSelector()}
  <div class="card" style="margin-bottom:13px"><div class="section-head"><div><div class="eyebrow">Project Workspace</div><h2 style="margin:4px 0;font-size:20px">${p.name}</h2><div class="muted">${p.client||''} · ${p.location||''}</div></div><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></div></div>
  <div class="grid">
  <div class="card metric"><small>Contract Value</small><div class="num">${money(p.budget)}</div><div class="note">${p.client||'Project'}</div></div>
  <div class="card metric"><small>BOQ Budget</small><div class="num">${money(budget)}</div><div class="note">${boq.length} BOQ items</div></div>
- <div class="card metric"><small>Actual / Spent</small><div class="num">${money(spent)}</div><div class="note">${p.budget?Math.round(spent/p.budget*100):0}% of contract</div></div>
+ <div class="card metric"><small>Actual Cost</small><div class="num">${money(spent)}</div><div class="note">${budget?Math.round(spent/budget*100):0}% of BOQ budget</div></div>
+ <div class="card metric"><small>Physical Progress</small><div class="num">${formatPct(physical)}</div><div class="note">Calculated from BOQ Work Value</div></div>
  <div class="card metric"><small>Open Snags</small><div class="num">${open}</div><div class="note ${open?'warn':'up'}">${open?'Items require action':'No open snags'}</div></div>
  </div>
  <div class="section two">
- <div class="card"><div class="section-head"><h2>Project Progress</h2><button class="btn" onclick="show('progress')">Update</button></div><div style="font-size:30px;font-weight:850">${p.progress||0}%</div><div class="bar" style="margin-top:10px"><i style="width:${p.progress||0}%"></i></div><div class="muted" style="margin-top:8px">BOQ actual: ${money(actual)}</div></div>
+ <div class="card"><div class="section-head"><h2>Project Progress</h2><button class="btn" onclick="show('progress')">View Planned vs Actual</button></div><div style="font-size:30px;font-weight:850">${formatPct(physical)}</div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,Math.max(0,physical))}%"></i></div><div class="muted" style="margin-top:8px">Work Value: ${money(stats.work)} · BOQ Budget: ${money(budget)}</div></div>
  <div class="card"><div class="section-head"><h2>Project Controls</h2></div><div class="row"><span>BOQ Items</span><strong>${boq.length}</strong></div><div class="row"><span>Variations</span><strong>${vars.length}</strong></div><div class="row"><span>Site Reports</span><strong>${reps.length}</strong></div><div class="row"><span>Expenses</span><strong>${exps.length}</strong></div></div>
  </div>
  <div class="section two"><div class="card"><div class="section-head"><h2>Open Snags</h2><button class="btn" onclick="show('snags')">Open</button></div>${snags.filter(s=>s.status!=='Closed').slice(0,5).map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.id}</div></div><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></div>`).join('')||'<div class="empty">No open snags.</div>'}</div>
  <div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${exps.slice(0,5).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.date} · ${x.category}</div></div><strong>${money(x.amount)}</strong></div>`).join('')||'<div class="empty">No expenses.</div>'}</div></div>`)
 }
-let visibleProjects=currentProject()?projectRows(data.projects):data.projects;let visibleMaterials=currentProject()?projectRows(data.materials):data.materials;let budget=visibleProjects.reduce((a,p)=>a+p.budget,0),spent=visibleProjects.reduce((a,p)=>a+(p.spent||0),0),alerts=visibleMaterials.filter(m=>m.stock<=m.reorder).length,open=projectRows(data.snags).filter(s=>s.status!=='Closed').length;return shell('dashboard',`${projectSelector()}
+let visibleProjects=currentProject()?projectRows(data.projects):data.projects;let visibleMaterials=currentProject()?projectRows(data.materials):data.materials;let budget=visibleProjects.reduce((a,p)=>a+projectBoqStats(p.db_id||p.id).budget,0),spent=visibleProjects.reduce((a,p)=>a+projectBoqStats(p.db_id||p.id).actual,0),alerts=visibleMaterials.filter(m=>m.stock<=m.reorder).length,open=projectRows(data.snags).filter(s=>s.status!=='Closed').length;return shell('dashboard',`${projectSelector()}
 <div class="grid">
 <div class="card metric"><small>Active Projects</small><div class="num">${data.projects.filter(p=>p.status==='Active').length}</div><div class="note up">● ${data.projects.length} total projects</div></div>
 <div class="card metric"><small>Portfolio Budget</small><div class="num">${money(budget)}</div><div class="note">${budget?Math.round(spent/budget*100):0}% committed/spent</div></div>
@@ -155,55 +155,116 @@ let visibleProjects=currentProject()?projectRows(data.projects):data.projects;le
 </div>
 <div class="section two">
 <div class="card"><div class="section-head"><h2>Project Control</h2><button class="btn" onclick="show('projects')">View all</button></div>
-<table><thead><tr><th>Project</th><th>Progress</th><th>Budget</th><th>Status</th></tr></thead><tbody>${data.projects.map(p=>`<tr onclick="enterProject('${p.db_id}')" style="cursor:pointer"><td><strong>${p.name}</strong><br><span class="muted">${p.location}</span></td><td><div class="bar"><i style="width:${p.progress}%"></i></div><small>${p.progress}%</small></td><td>${money(p.budget)}</td><td><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></td></tr>`).join('')}</tbody></table></div>
+<table><thead><tr><th>Project</th><th>Progress</th><th>Budget</th><th>Status</th></tr></thead><tbody>${data.projects.map(p=>`<tr onclick="enterProject('${p.db_id}')" style="cursor:pointer"><td><strong>${p.name}</strong><br><span class="muted">${p.location}</span></td><td><div class="bar"><i style="width:${Math.min(100,projectBoqStats(p.db_id||p.id).progress)}%"></i></div><small>${formatPct(projectBoqStats(p.db_id||p.id).progress)}</small></td><td>${money(p.budget)}</td><td><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></td></tr>`).join('')}</tbody></table></div>
 <div class="card"><div class="section-head"><h2>Cost Position</h2><span class="muted">Actual spend</span></div>${data.projects.map(p=>`<div class="row"><div><strong>${p.name}</strong><div class="muted">${p.budget?Math.round(p.spent/p.budget*100):0}% of budget</div></div><strong>${money(p.spent)}</strong></div>`).join('')}</div>
 </div>
 <div class="section two"><div class="card"><div class="section-head"><h2>Procurement Watch</h2><button class="btn" onclick="show('procurement')">Open</button></div>${data.procurement.map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.supplier} · ${x.qty}</div></div><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></div>`).join('')}</div>
 <div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${data.expenses.slice(0,4).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.project} · ${x.date}</div></div><strong>${money(x.amount)}</strong></div>`).join('')}</div></div>`)
 }
 function table(id,title,headers,rows,action){return shell(id,`<div class="card"><div class="section-head"><h2>${title}</h2><div class="module-tools">${action||''}</div></div><div style="overflow:auto"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${headers.length}" class="empty">No records.</td></tr>`}</tbody></table></div></div>`)}
+function num(v){return Number.isFinite(Number(v))?Number(v).toLocaleString('en-KE',{maximumFractionDigits:2}):'0'}
+function formatPct(v){return `${Number(v||0).toFixed(1)}%`}
+function boqAmount(x){const q=Number(x.quantity),r=Number(x.rate);return q>0&&r>=0?q*r:Number(x.budget||0)}
+function boqWorkValue(x){return boqAmount(x)*(Math.max(0,Math.min(100,Number(x.progress||0)))/100)}
+function projectBoqStats(pid){
+  const rows=data.boq.filter(x=>String(x.project_id||'')===String(pid));
+  const budget=rows.reduce((a,x)=>a+boqAmount(x),0);
+  const work=rows.reduce((a,x)=>a+boqWorkValue(x),0);
+  const actual=rows.reduce((a,x)=>a+Number(x.actual||0),0);
+  return {rows,budget,work,actual,progress:budget?work/budget*100:0};
+}
 function render(){
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
-let p=visibleProjects.map(x=>`<tr onclick="openProject('${x.db_id||x.id}')" style="cursor:pointer"><td><strong>${x.name}</strong></td><td>${x.client}</td><td>${x.location}</td><td>${money(x.budget)}</td><td>${x.progress||0}%</td><td><span class="pill ${x.status==='Active'?'green':'orange'}">${x.status}</span></td></tr>`).join('');
-let b=projectRows(data.boq).map(x=>`<tr><td>${x.project||''}</td><td>${x.code}</td><td><strong>${x.description}</strong></td><td>${money(x.budget)}</td><td>${money(x.actual)}</td><td class="${x.actual>x.budget?'down':'up'}">${money(x.budget-x.actual)}</td><td>${x.progress}%</td></tr>`).join('');
-let m=projectRows(data.materials).map(x=>`<tr><td>${x.project||'General / Company Stock'}</td><td><strong>${x.name}</strong></td><td>${x.unit}</td><td>${x.stock}</td><td>${x.reorder}</td><td>${money(x.unitCost)}</td><td><span class="pill ${x.stock>x.reorder?'green':'red'}">${x.stock>x.reorder?'OK':'Reorder'}</span></td></tr>`).join('');
-let l=data.labour.map(x=>`<tr><td><strong>${x.trade}</strong></td><td>${x.workers}</td><td>${money(x.rate)}</td><td>${x.days}</td><td>${money(x.workers*x.rate*x.days)}</td></tr>`).join('');
-let q=projectRows(data.procurement).map(x=>`<tr><td><strong>${x.item}</strong></td><td>${x.supplier}</td><td>${x.qty}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></td></tr>`).join('');
-let pr=visibleProjects.map(x=>`<tr><td><strong>${x.name}</strong></td><td style="min-width:110px"><div class="bar"><i style="width:${x.progress||0}%"></i></div><small>${x.progress||0}%</small></td><td>${money(x.budget)}</td><td>${money(x.spent)}</td><td>${x.budget?Math.round((x.spent||0)/x.budget*100):0}%</td></tr>`).join('');
-let v=projectRows(data.variations).map(x=>`<tr><td>${x.ref}</td><td>${x.project}</td><td>${x.description}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Approved'?'green':'orange'}">${x.status}</span></td></tr>`).join('');
-let r=projectRows(data.reports).map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.type}</td><td>${x.author}</td><td><span class="pill green">${x.status}</span></td></tr>`).join('');
-let s=projectRows(data.snags).map(x=>`<tr><td>${x.id}</td><td>${x.project}</td><td>${x.item}</td><td><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></td><td>${x.status}</td></tr>`).join('');
-let e=projectRows(data.expenses).map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.category}</td><td>${x.description}</td><td><strong>${money(x.amount)}</strong></td></tr>`).join('');
+const act=(t,x)=>`<td><div class="module-tools"><button class="btn" onclick="event.stopPropagation();editRecord('${t}','${x.db_id||x.id}')">Edit</button>${t==='progress'?'':`<button class="btn" onclick="event.stopPropagation();deleteRecord('${t}','${x.db_id||x.id}')">Delete</button>`}</div></td>`;
+let p=visibleProjects.map(x=>`<tr onclick="openProject('${x.db_id||x.id}')" style="cursor:pointer"><td><strong>${x.name}</strong></td><td>${x.client}</td><td>${x.location}</td><td>${money(x.budget)}</td><td>${x.progress||0}%</td><td><span class="pill ${x.status==='Active'?'green':'orange'}">${x.status}</span></td>${act('project',x)}</tr>`).join('');
+let b=projectRows(data.boq).map(x=>{const amount=boqAmount(x),work=boqWorkValue(x);return `<tr><td>${x.project||''}</td><td>${x.code}</td><td><strong>${x.description}</strong></td><td>${x.unit||''}</td><td>${num(x.quantity)}</td><td>${money(x.rate)}</td><td>${money(amount)}</td><td>${money(x.actual)}</td><td class="${x.actual>amount?'down':'up'}">${money(amount-x.actual)}</td><td>${formatPct(x.progress)}</td><td>${money(work)}</td>${act('boq',x)}</tr>`}).join('');
+let m=projectRows(data.materials).map(x=>`<tr><td>${x.project||'General / Company Stock'}</td><td><strong>${x.name}</strong></td><td>${x.unit}</td><td>${x.stock}</td><td>${x.reorder}</td><td>${money(x.unitCost)}</td><td><span class="pill ${x.stock>x.reorder?'green':'red'}">${x.stock>x.reorder?'OK':'Reorder'}</span></td>${act('material',x)}</tr>`).join('');
+let l=projectRows(data.labour).map(x=>`<tr><td><strong>${x.trade}</strong></td><td>${x.workers}</td><td>${money(x.rate)}</td><td>${x.days}</td><td>${money(x.workers*x.rate*x.days)}</td>${act('labour',x)}</tr>`).join('');
+let q=projectRows(data.procurement).map(x=>`<tr><td><strong>${x.item}</strong></td><td>${x.supplier}</td><td>${x.qty}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></td>${act('procurement',x)}</tr>`).join('');
+let pr=visibleProjects.map(x=>{const s=projectBoqStats(x.db_id||x.id);return `<tr><td><strong>${x.name}</strong></td><td style="min-width:110px"><div class="bar"><i style="width:${Math.min(100,s.progress)}%"></i></div><small>${formatPct(s.progress)}</small></td><td>${money(s.budget)}</td><td>${money(s.actual)}</td><td>${s.budget?Math.round(s.actual/s.budget*100):0}%</td><td><button class="btn" onclick="event.stopPropagation();show('boq')">View BOQ</button></td></tr>`}).join('');
+let v=projectRows(data.variations).map(x=>`<tr><td>${x.ref}</td><td>${x.project}</td><td>${x.description}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Approved'?'green':'orange'}">${x.status}</span></td>${act('variation',x)}</tr>`).join('');
+let r=projectRows(data.reports).map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.type}</td><td>${x.author}</td><td><span class="pill green">${x.status}</span></td>${act('report',x)}</tr>`).join('');
+let sn=projectRows(data.snags).map(x=>`<tr><td>${x.id}</td><td>${x.project}</td><td>${x.item}</td><td><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></td><td>${x.status}</td>${act('snag',x)}</tr>`).join('');
+let e=projectRows(data.expenses).map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.category}</td><td>${x.description}</td><td><strong>${money(x.amount)}</strong></td>${act('expense',x)}</tr>`).join('');
 const scopedNote=currentProject()?`<span class="muted">Showing ${currentProject().name}</span>`:'';
 document.getElementById('modules').innerHTML=[
 dashboard(),
-table('projects','Projects',['Project','Client','Location','Budget','Progress','Status'],p,`<button class="btn primary" onclick="openModal('project')">+ Project</button>`),
-table('boq','BOQ & Cost Control',['Project','Code','Description','Budget','Actual','Variance','Progress'],b,`<button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
-table('materials','Materials & Stock',['Project','Material','Unit','Stock','Reorder','Unit Cost','Status'],m,`<button class="btn primary" onclick="openModal('material')">+ Material</button>`),
-table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),
-table('procurement','Procurement',['Item','Supplier','Quantity','Value','Status'],q,`${scopedNote}<button class="btn primary" onclick="openModal('procurement')">+ Purchase</button>`),
-table('progress','Progress Tracking',['Project','Progress','Budget','Spent','Spend %'],pr,`<button class="btn primary" onclick="openModal('progress')">+ Update</button>`),
-table('variations','Variations',['Reference','Project','Description','Value','Status'],v,`<button class="btn primary" onclick="openModal('variation')">+ Variation</button>`),
-table('reports','Site Reports',['Date','Project','Type','Author','Status'],r,`<button class="btn primary" onclick="openModal('report')">+ Report</button>`),
-table('snags','Snagging',['ID','Project','Item','Priority','Status'],s,`<button class="btn primary" onclick="openModal('snag')">+ Snag</button>`),
-table('expenses','Expenses / Petty Cash',['Date','Project','Category','Description','Amount'],e,`<button class="btn primary" onclick="openModal('expense')">+ Expense</button>`)
+table('projects','Projects',['Project','Client','Location','Budget','Progress','Status','Actions'],p,`<button class="btn primary" onclick="openModal('project')">+ Project</button>`),
+table('boq','BOQ & Cost Control',['Project','Item','Description','Unit','Qty','Rate','Amount','Actual Cost','Variance','% Complete','Work Value','Actions'],b,`<button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
+table('materials','Materials & Stock',['Project','Material','Unit','Stock','Reorder','Unit Cost','Status','Actions'],m,`<button class="btn primary" onclick="openModal('material')">+ Material</button>`),
+table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost','Actions'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),
+table('procurement','Procurement',['Item','Supplier','Quantity','Value','Status','Actions'],q,`${scopedNote}<button class="btn primary" onclick="openModal('procurement')">+ Purchase</button>`),
+table('progress','Progress Tracking',['Project','Physical Progress','BOQ Budget','Actual Cost','Spend %','Action'],pr,``),
+table('variations','Variations',['Reference','Project','Description','Value','Status','Actions'],v,`<button class="btn primary" onclick="openModal('variation')">+ Variation</button>`),
+table('reports','Site Reports',['Date','Project','Type','Author','Status','Actions'],r,`<button class="btn primary" onclick="openModal('report')">+ Report</button>`),
+table('snags','Snagging',['ID','Project','Item','Priority','Status','Actions'],sn,`<button class="btn primary" onclick="openModal('snag')">+ Snag</button>`),
+table('expenses','Expenses / Petty Cash',['Date','Project','Category','Description','Amount','Actions'],e,`<button class="btn primary" onclick="openModal('expense')">+ Expense</button>`)
 ].join('');
 updateProjectContext();
 }
-
 const opts=()=>data.projects.map(p=>`<option>${p.name}</option>`).join('');
 function openModal(t){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';
-if(t==='project')h=`<div class="form"><label>Project name<input id="f1" placeholder="e.g. Karen Villas"></label><label>Client<input id="f2"></label><label>Location<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('project')">Create Project</button></div>`;
-if(t==='boq')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Code<input id="f2"></label><label>Description<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><label>Actual (KES)<input id="f5" type="number" value="0"></label><label>Progress %<input id="f6" type="number" value="0"></label><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
+if(t==='project')h=`<div class="form"><label>Project name<input id="f1" placeholder="e.g. Karen Villas"></label><label>Client<input id="f2"></label><label>Location<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Active</option><option>On Hold</option><option>Completed</option></select></label><button class="btn primary" onclick="add('project')">Create Project</button></div>`;
+if(t==='boq')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Item / Code<input id="f2"></label><label>Description<input id="f3"></label><label>Unit<input id="f4" placeholder="m², m³, No."></label><label>Quantity<input id="f5" type="number" step="0.01" min="0"></label><label>Rate (KES)<input id="f6" type="number" step="0.01" min="0"></label><label>% Complete<input id="f7" type="number" step="0.01" min="0" max="100" value="0"></label><div class="muted" style="font-size:11px">Amount and Work Value are calculated automatically.</div><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
 if(t==='material')h=`<div class="form"><label>Project<select id="f1"><option value="">General / Company Stock</option>${data.projects.map(p=>`<option value="${p.name}" ${currentProject()&&currentProject().name===p.name?'selected':''}>${p.name}</option>`).join('')}</select></label><label>Material<input id="f2"></label><label>Unit<input id="f3"></label><label>Stock<input id="f4" type="number"></label><label>Reorder level<input id="f5" type="number"></label><label>Unit cost (KES)<input id="f6" type="number"></label><button class="btn primary" onclick="add('material')">Add Material</button></div>`;
 if(t==='labour')h=`<div class="form"><label>Trade<input id="f1"></label><label>Workers<input id="f2" type="number"></label><label>Daily rate (KES)<input id="f3" type="number"></label><label>Days<input id="f4" type="number"></label><button class="btn primary" onclick="add('labour')">Add Record</button></div>`;
 if(t==='procurement')h=`<div class="form"><label>Item<input id="f1"></label><label>Supplier<input id="f2"></label><label>Quantity<input id="f3"></label><label>Value (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Pending</option><option>Ordered</option><option>Delivered</option></select></label><button class="btn primary" onclick="add('procurement')">Add Purchase</button></div>`;
-if(t==='progress')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Progress %<input id="f2" type="number"></label><label>Spent to date (KES)<input id="f3" type="number"></label><button class="btn primary" onclick="add('progress')">Update Project</button></div>`;
+if(t==='progress')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><div class="muted">Overall physical progress is calculated automatically from BOQ Work Value. Use the Progress module for planned vs actual programme percentages.</div><button class="btn" onclick="closeModal();show('boq')">Open BOQ</button></div>`;
 if(t==='variation')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Value (KES)<input id="f3" type="number"></label><label>Status<select id="f4"><option>Submitted</option><option>Approved</option><option>Rejected</option></select></label><button class="btn primary" onclick="add('variation')">Add Variation</button></div>`;
 if(t==='report')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Type<select id="f2"><option>Daily Site Report</option><option>Weekly Progress</option><option>Inspection Report</option><option>Meeting Minutes</option></select></label><label>Author<input id="f3" value="Site Team"></label><button class="btn primary" onclick="add('report')">Create Report</button></div>`;
 if(t==='snag')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Priority<select id="f3"><option>High</option><option>Medium</option><option>Low</option></select></label><button class="btn primary" onclick="add('snag')">Add Snag</button></div>`;
 if(t==='expense')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Category<select id="f2"><option>Petty Cash</option><option>Transport</option><option>Site</option><option>Tools</option><option>Other</option></select></label><label>Description<input id="f3"></label><label>Amount (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('expense')">Add Expense</button></div>`;
 document.getElementById('modalBody').innerHTML=h;document.getElementById('modal').classList.add('open')}
+function recordById(t,id){const key=String(id);return (data[t==='project'?'projects':t==='boq'?'boq':t==='material'?'materials':t==='labour'?'labour':t==='procurement'?'procurement':t==='progress'?'projects':t==='variation'?'variations':t==='report'?'reports':t==='snag'?'snags':'expenses']||[]).find(x=>String(x.db_id||x.id)===key)}
+function editRecord(t,id){
+  const x=recordById(t,id); if(!x){toast('Record not found');return;}
+  openModal(t);
+  document.getElementById('modalTitle').textContent='Edit '+({project:'Project',boq:'BOQ Item',material:'Material',labour:'Labour Record',procurement:'Purchase',progress:'Project Progress',variation:'Variation',report:'Site Report',snag:'Snag',expense:'Expense'}[t]||'Record');
+  const btn=document.querySelector('#modalBody button.btn.primary'); if(btn) btn.textContent='Save Changes'; if(btn) btn.onclick=()=>updateRecord(t,id);
+  const set=(n,val)=>{const e=document.getElementById(n);if(e)e.value=val??''};
+  if(t==='project'){set('f1',x.name);set('f2',x.client);set('f3',x.location);set('f4',x.budget);set('f5',x.status||'Active');}
+  if(t==='boq'){set('f1',x.project);set('f2',x.code);set('f3',x.description);set('f4',x.unit);set('f5',x.quantity);set('f6',x.rate);set('f7',x.progress);}
+  if(t==='material'){set('f1',x.project);set('f2',x.name);set('f3',x.unit);set('f4',x.stock);set('f5',x.reorder);set('f6',x.unitCost);}
+  if(t==='labour'){set('f1',x.trade);set('f2',x.workers);set('f3',x.rate);set('f4',x.days);}
+  if(t==='procurement'){set('f1',x.item);set('f2',x.supplier);set('f3',x.qty);set('f4',x.value);set('f5',x.status);}
+  if(t==='progress'){set('f1',x.name);set('f2',x.progress);set('f3',x.spent);}
+  if(t==='variation'){set('f1',x.project);set('f2',x.description);set('f3',x.value);set('f4',x.status);}
+  if(t==='report'){set('f1',x.project);set('f2',x.type);set('f3',x.author);}
+  if(t==='snag'){set('f1',x.project);set('f2',x.item);set('f3',x.priority);}
+  if(t==='expense'){set('f1',x.project);set('f2',x.category);set('f3',x.description);set('f4',x.amount);}
+}
+async function updateRecord(t,id){
+  const x=recordById(t,id); if(!x){toast('Record not found');return;}
+  const setProjectFields=(obj)=>{const pn=v('f1');const p=data.projects.find(q=>q.name===pn);obj.project=pn||'General / Company Stock';obj.project_id=p?.db_id||p?.id||null};
+  if(t==='project'){x.name=v('f1');x.client=v('f2');x.location=v('f3');x.budget=+v('f4');x.status=v('f5');
+    if(cloudReady&&x.db_id){const r=await sb.from('project_records').update({name:x.name,client:x.client,location:x.location,status:x.status,contract_value:x.budget,updated_at:new Date().toISOString()}).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('Project update failed: '+r.error.message);return}}
+  }
+  if(t==='boq'){setProjectFields(x);x.code=v('f2');x.description=v('f3');x.unit=v('f4');x.quantity=+v('f5');x.rate=+v('f6');x.progress=+v('f7');x.budget=boqAmount(x);
+    if(cloudReady&&x.db_id){const r=await sb.from('boq_items').update({project_id:x.project_id,code:x.code,description:x.description,unit:x.unit,quantity:x.quantity,rate:x.rate,budget:x.budget,actual:Number(x.actual||0),progress:x.progress,work_value:boqWorkValue(x),updated_at:new Date().toISOString()}).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('BOQ update failed: '+r.error.message);return}}
+  }
+  if(t==='material'){setProjectFields(x);x.name=v('f2');x.unit=v('f3');x.stock=+v('f4');x.reorder=+v('f5');x.unitCost=+v('f6');
+    if(cloudReady&&x.db_id){const r=await sb.from('material_records').update({project_id:x.project_id,name:x.name,unit:x.unit,stock:x.stock,reorder:x.reorder,unit_cost:x.unitCost,updated_at:new Date().toISOString()}).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('Material update failed: '+r.error.message);return}}
+  }
+  if(t==='labour'){x.trade=v('f1');x.workers=+v('f2');x.rate=+v('f3');x.days=+v('f4');}
+  if(t==='procurement'){x.item=v('f1');x.supplier=v('f2');x.qty=v('f3');x.value=+v('f4');x.status=v('f5');}
+  if(t==='progress'){x.progress=+v('f2');x.spent=+v('f3');}
+  if(t==='variation'){x.project=v('f1');x.description=v('f2');x.value=+v('f3');x.status=v('f4');}
+  if(t==='report'){x.project=v('f1');x.type=v('f2');x.author=v('f3');}
+  if(t==='snag'){x.project=v('f1');x.item=v('f2');x.priority=v('f3');}
+  if(t==='expense'){x.project=v('f1');x.category=v('f2');x.description=v('f3');x.amount=+v('f4');}
+  save(); closeModal(); render(); toast('Changes saved');
+}
+async function deleteRecord(t,id){
+  const x=recordById(t,id); if(!x){toast('Record not found');return;}
+  const label=t==='project'?x.name:(x.description||x.name||x.item||x.trade||x.ref||x.id||'this record');
+  if(!confirm(`Delete ${label}? This cannot be undone.`))return;
+  const tableMap={project:'project_records',boq:'boq_items',material:'material_records'};
+  if(cloudReady&&x.db_id&&tableMap[t]){const r=await sb.from(tableMap[t]).delete().eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('Delete failed: '+r.error.message);return}}
+  const arrKey=t==='project'?'projects':t==='boq'?'boq':t==='material'?'materials':t==='labour'?'labour':t==='procurement'?'procurement':t==='progress'?'projects':t==='variation'?'variations':t==='report'?'reports':t==='snag'?'snags':'expenses';
+  data[arrKey]=data[arrKey].filter(y=>String(y.db_id||y.id)!==String(id));
+  if(t==='project'&&String(currentProjectId)===String(id))currentProjectId=null;
+  save(); render(); toast('Deleted successfully');
+}
 function closeModal(){document.getElementById('modal').classList.remove('open')}const v=i=>document.getElementById(i).value;
 async function add(t){
   let today=new Date().toISOString().slice(0,10);
@@ -217,7 +278,7 @@ async function add(t){
       budget:+v('f4'),
       spent:0,
       progress:0,
-      status:'Active'
+      status:v('f5')||'Active'
     };
 
     if(cloudReady && currentCompany){
@@ -250,10 +311,14 @@ async function add(t){
       project_id:project?.db_id||project?.id||null,
       code:v('f2'),
       description:v('f3'),
-      budget:+v('f4'),
-      actual:+v('f5'),
-      progress:+v('f6')
+      unit:v('f4'),
+      quantity:+v('f5'),
+      rate:+v('f6'),
+      budget:0,
+      actual:0,
+      progress:+v('f7')
     };
+    item.budget=boqAmount(item);
 
     if(cloudReady && currentCompany){
       if(!item.project_id){
@@ -266,9 +331,13 @@ async function add(t){
         project_id:item.project_id,
         code:item.code,
         description:item.description,
+        unit:item.unit,
+        quantity:item.quantity,
+        rate:item.rate,
         budget:item.budget,
         actual:item.actual,
         progress:item.progress,
+        work_value:boqWorkValue(item),
         created_by:currentUser.id
       }).select('id').single();
 
@@ -331,13 +400,7 @@ async function add(t){
     status:v('f5')
   });
 
-  if(t==='progress'){
-    let p=data.projects.find(x=>x.name===v('f1'));
-    if(p){
-      p.progress=+v('f2');
-      p.spent=+v('f3');
-    }
-  }
+  if(t==='progress'){ closeModal(); show('progress'); return; }
 
   if(t==='variation')data.variations.push({
     ref:'VO-'+String(data.variations.length+1).padStart(3,'0'),
@@ -466,7 +529,7 @@ async function loadCloudWorkspace(){
   data.materials=(mat.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'General / Company Stock',name:x.name||'',unit:x.unit||'',stock:Number(x.stock||0),reorder:Number(x.reorder||0),unitCost:Number(x.unit_cost||0)}));
 
   const b=await sb.from('boq_items')
-    .select('id,project_id,code,description,budget,actual,progress')
+    .select('id,project_id,code,description,unit,quantity,rate,budget,actual,progress,work_value')
     .eq('company_id',currentCompany.company_id)
     .order('created_at',{ascending:true});
 
@@ -483,9 +546,13 @@ async function loadCloudWorkspace(){
     project:projectNames.get(x.project_id)||'',
     code:x.code||'',
     description:x.description||'',
+    unit:x.unit||'',
+    quantity:Number(x.quantity||0),
+    rate:Number(x.rate||0),
     budget:Number(x.budget||0),
     actual:Number(x.actual||0),
-    progress:Number(x.progress||0)
+    progress:Number(x.progress||0),
+    work_value:Number(x.work_value||0)
   }));
 
   const m=await sb.from('material_records')

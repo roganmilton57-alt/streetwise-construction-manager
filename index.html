@@ -46,7 +46,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 <main class="main">
  <header class="top">
   <div><div class="eyebrow">Construction Control System</div><h1 id="title">Dashboard</h1><p id="subtitle">Portfolio, commercial and site control</p></div>
-  <div class="actions"><select id="projectContext" class="btn" onchange="setProject(this.value)" style="max-width:220px"><option value="">All Projects</option></select><button class="btn install" id="installBtn" onclick="installApp()">Install App</button><button class="btn secondary" onclick="exportData()">Export</button><button class="btn primary" onclick="openModal('project')">+ New Project</button></div>
+  <div class="actions"><select id="projectContext" class="btn" onchange="setProject(this.value)" style="max-width:220px"><option value="">All Projects</option></select><button class="btn install" id="installBtn" onclick="installApp()">Install App</button><button class="btn secondary" onclick="exportData()">Export</button><button class="btn" onclick="signOut()">Log out</button><button class="btn primary" onclick="openModal('project')">+ New Project</button></div>
  </header>
  <div id="modules"></div>
 </main>
@@ -813,7 +813,7 @@ async function loadCloudWorkspace(){
   return true;
 }
 async function persistCloud(){if(!cloudReady||!currentCompany)return false;const r=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:data,updated_by:currentUser.id,updated_at:new Date().toISOString()});if(r.error){toast('Cloud save failed: '+r.error.message);return false}localStorage.setItem('streetwiseDataV2',JSON.stringify(data));return true}
-async function signOut(){if(sb)await sb.auth.signOut();currentUser=null;currentCompany=null;cloudReady=false;data=structuredClone(emptyWorkspace);localStorage.removeItem('streetwiseDataV2');showAuth(true)}
+async function signOut(){try{if(sb)await sb.auth.signOut()}finally{currentUser=null;currentCompany=null;cloudReady=false;data=structuredClone(emptyWorkspace);currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';localStorage.removeItem('streetwiseNavigation');localStorage.removeItem('streetwiseDataV2');document.getElementById('companyScreen').style.display='none';showAuth(true);toast('Signed out') } }
 save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing was saved.');return false}persistCloud();return true};
 boot();
 </script>

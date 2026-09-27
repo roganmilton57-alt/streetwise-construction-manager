@@ -31,6 +31,9 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 .mobilebar{display:none}.toast{position:fixed;z-index:100;right:20px;bottom:20px;background:var(--navy);color:#fff;padding:10px 14px;border-radius:9px;box-shadow:var(--shadow);font-size:12px;display:none}.toast.show{display:block}
 @media(max-width:950px){.sidebar{display:none}.main{margin:0;width:100%;padding:16px 14px 82px}.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.mobilebar{display:flex;position:fixed;z-index:30;bottom:0;left:0;right:0;height:65px;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-top:1px solid var(--line);justify-content:space-around;padding-bottom:env(safe-area-inset-bottom)}.mobilebar button{border:0;background:none;color:var(--muted);font-size:9px;min-width:54px}.mobilebar button.active{color:var(--navy);font-weight:850}.mobilebar span{display:block;font-size:18px;margin-bottom:2px}.top h1{font-size:21px}.install{display:none!important}}
 @media(max-width:540px){.grid{gap:8px}.card{padding:12px}.metric .num{font-size:20px}.actions .secondary{display:none}table{font-size:11px}.top{align-items:flex-start}.top .btn{padding:8px}.main{padding-left:11px;padding-right:11px}}
+
+.inline-edit{display:inline-block;min-width:24px;padding:2px 4px;border-radius:5px;cursor:text;outline:none;transition:background .15s,box-shadow .15s}.inline-edit:hover{background:#f1f5f8}.inline-edit:focus{background:#fff;box-shadow:0 0 0 2px rgba(31,95,139,.18)}.inline-edit.saving{opacity:.55}.inline-edit.error{box-shadow:0 0 0 2px rgba(184,71,71,.35);background:#fff4f4}
+.inline-help{font-size:11px;color:var(--muted);margin-top:5px}
 </style>
 </head>
 <body>
@@ -218,12 +221,79 @@ function projectActualCost(pid){
   const materialCost=projectMaterialStats(pid).cost;
   return boqActual+materialCost;
 }
+function inlineEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function inlineCell(t,x,field,value,opts={}){
+  const id=inlineEsc(x.db_id||x.id), display=inlineEsc(value??'');
+  const numeric=opts.numeric?' data-numeric="1"':'';
+  const step=opts.step?` data-step="${opts.step}"`:'';
+  return `<span class="inline-edit" contenteditable="true" spellcheck="false" data-inline-t="${t}" data-inline-id="${id}" data-inline-field="${field}"${numeric}${step} title="Click to edit">${display}</span>`;
+}
+async function inlineSave(el){
+  if(!el||el.dataset.saving==='1')return;
+  const t=el.dataset.inlineT,id=el.dataset.inlineId,field=el.dataset.inlineField;
+  const x=recordById(t,id); if(!x)return;
+  let value=el.textContent.trim();
+  const old=el.dataset.original??'';
+  if(value===old)return;
+  if(el.dataset.numeric==='1'){
+    value=value.replace(/,/g,'');
+    if(value==='' || !Number.isFinite(Number(value))){el.textContent=old;el.classList.add('error');setTimeout(()=>el.classList.remove('error'),900);toast('Enter a valid number');return;}
+    value=Number(value);
+  }
+  el.dataset.saving='1';el.classList.add('saving');
+  const moduleBefore=currentModuleId||'dashboard', projectBefore=currentProjectId;
+  const fail=(msg)=>{el.textContent=old;el.classList.add('error');setTimeout(()=>el.classList.remove('error'),900);toast(msg)};
+  try{
+    if(t==='boq'){
+      const patch={};
+      if(field==='code')x.code=String(value),patch.code=x.code;
+      else if(field==='description')x.description=String(value),patch.description=x.description;
+      else if(field==='unit')x.unit=String(value),patch.unit=x.unit;
+      else if(field==='quantity')x.quantity=Number(value),patch.quantity=x.quantity;
+      else if(field==='rate')x.rate=Number(value),patch.rate=x.rate;
+      else if(field==='actual')x.actual=Number(value),patch.actual=x.actual;
+      else if(field==='progress')x.progress=Math.max(0,Math.min(100,Number(value))),patch.progress=x.progress;
+      else return;
+      x.budget=boqAmount(x);
+      if(cloudReady&&x.db_id){Object.assign(patch,{budget:x.budget,work_value:boqWorkValue(x),updated_at:new Date().toISOString()});const r=await sb.from('boq_items').update(patch).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){fail('BOQ update failed: '+r.error.message);return}}
+    }else if(t==='material'){
+      const patch={};
+      if(field==='date')x.date=String(value),patch.transaction_date=x.date;
+      else if(field==='name')x.name=String(value),patch.name=x.name;
+      else if(field==='unit')x.unit=String(value),patch.unit=x.unit;
+      else if(field==='qtyReceived')x.qtyReceived=Number(value),patch.qty_received=x.qtyReceived;
+      else if(field==='unitCost')x.unitCost=Number(value),patch.unit_cost=x.unitCost;
+      else if(field==='qtyUsed')x.qtyUsed=Number(value),patch.qty_used=x.qtyUsed;
+      else if(field==='supplier')x.supplier=String(value),patch.supplier=x.supplier;
+      else if(field==='notes')x.notes=String(value),patch.notes=x.notes;
+      else return;
+      x.totalCost=materialTotalCost(x);x.stock=materialBalance(x);
+      if(cloudReady&&x.db_id){Object.assign(patch,{total_cost:x.totalCost,stock:x.stock,updated_at:new Date().toISOString()});const r=await sb.from('material_records').update(patch).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){fail('Material update failed: '+r.error.message);return}}
+    }else{
+      // Other modules still use the full Edit action for structured fields.
+      return;
+    }
+    save();
+    render();
+    currentProjectId=projectBefore;
+    show(moduleBefore);
+    toast('Saved');
+  }finally{el.dataset.saving='0';el.classList.remove('saving')}
+}
+function bindInlineEditors(){
+  document.querySelectorAll('.inline-edit').forEach(el=>{
+    el.addEventListener('focus',()=>{el.dataset.original=el.textContent.trim()});
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}if(e.key==='Escape'){el.textContent=el.dataset.original??'';el.blur()}});
+    el.addEventListener('blur',()=>inlineSave(el));
+    el.addEventListener('click',e=>e.stopPropagation());
+  });
+}
 function render(){
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
 const act=(t,x)=>`<td><div class="module-tools"><button class="btn" onclick="event.stopPropagation();editRecord('${t}','${x.db_id||x.id}')">Edit</button>${t==='progress'?'':`<button class="btn" onclick="event.stopPropagation();deleteRecord('${t}','${x.db_id||x.id}')">Delete</button>`}</div></td>`;
 let p=visibleProjects.map(x=>`<tr onclick="openProject('${x.db_id||x.id}')" style="cursor:pointer"><td><strong>${x.name}</strong></td><td>${x.client}</td><td>${x.location}</td><td>${money(x.budget)}</td><td>${x.progress||0}%</td><td><span class="pill ${x.status==='Active'?'green':'orange'}">${x.status}</span></td>${act('project',x)}</tr>`).join('');
-let b=projectRows(data.boq).map(x=>{const amount=boqAmount(x),work=boqWorkValue(x);return `<tr><td>${x.project||''}</td><td>${x.code}</td><td><strong>${x.description}</strong></td><td>${x.unit||''}</td><td>${num(x.quantity)}</td><td>${money(x.rate)}</td><td>${money(amount)}</td><td>${money(x.actual)}</td><td class="${x.actual>amount?'down':'up'}">${money(amount-x.actual)}</td><td>${formatPct(x.progress)}</td><td>${money(work)}</td>${act('boq',x)}</tr>`}).join('');
-let m=projectRows(data.materials).map(x=>`<tr><td>${x.date||''}</td><td>${x.project||'General / Company Stock'}</td><td><strong>${x.name}</strong></td><td>${x.unit||''}</td><td>${Number(x.qtyReceived||0)}</td><td>${money(x.unitCost||0)}</td><td>${money(materialTotalCost(x))}</td><td>${Number(x.qtyUsed||0)}</td><td>${Number(materialBalance(x))}</td><td>${x.supplier||''}</td><td>${x.notes||''}</td>${act('material',x)}</tr>`).join('');
+let b=projectRows(data.boq).map(x=>{const amount=boqAmount(x),work=boqWorkValue(x);return `<tr><td>${x.project||''}</td><td>${inlineCell('boq',x,'code',x.code)}</td><td><strong>${inlineCell('boq',x,'description',x.description)}</strong></td><td>${inlineCell('boq',x,'unit',x.unit||'')}</td><td>${inlineCell('boq',x,'quantity',num(x.quantity),{numeric:true,step:'0.01'})}</td><td>${inlineCell('boq',x,'rate',num(x.rate),{numeric:true,step:'0.01'})}</td><td>${money(amount)}</td><td>${inlineCell('boq',x,'actual',num(x.actual),{numeric:true,step:'0.01'})}</td><td class="${x.actual>amount?'down':'up'}">${money(amount-x.actual)}</td><td>${inlineCell('boq',x,'progress',formatPct(x.progress),{numeric:true,step:'0.01'})}</td><td>${money(work)}</td>${act('boq',x)}</tr>`}).join('');
+let m=projectRows(data.materials).map(x=>`<tr><td>${inlineCell('material',x,'date',x.date||'')}</td><td>${x.project||'General / Company Stock'}</td><td><strong>${inlineCell('material',x,'name',x.name)}</strong></td><td>${inlineCell('material',x,'unit',x.unit||'')}</td><td>${inlineCell('material',x,'qtyReceived',num(x.qtyReceived||0),{numeric:true,step:'0.01'})}</td><td>${inlineCell('material',x,'unitCost',num(x.unitCost||0),{numeric:true,step:'0.01'})}</td><td>${money(materialTotalCost(x))}</td><td>${inlineCell('material',x,'qtyUsed',num(x.qtyUsed||0),{numeric:true,step:'0.01'})}</td><td>${num(materialBalance(x))}</td><td>${inlineCell('material',x,'supplier',x.supplier||'')}</td><td>${inlineCell('material',x,'notes',x.notes||'')}</td>${act('material',x)}</tr>`).join('');
 let l=projectRows(data.labour).map(x=>`<tr><td><strong>${x.trade}</strong></td><td>${x.workers}</td><td>${money(x.rate)}</td><td>${x.days}</td><td>${money(x.workers*x.rate*x.days)}</td>${act('labour',x)}</tr>`).join('');
 let q=projectRows(data.procurement).map(x=>`<tr><td><strong>${x.item}</strong></td><td>${x.supplier}</td><td>${x.qty}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></td>${act('procurement',x)}</tr>`).join('');
 let pr=visibleProjects.map(x=>{const s=projectBoqStats(x.db_id||x.id);return `<tr><td><strong>${x.name}</strong></td><td style="min-width:110px"><div class="bar"><i style="width:${Math.min(100,s.progress)}%"></i></div><small>${formatPct(s.progress)}</small></td><td>${money(s.budget)}</td><td>${money(s.actual)}</td><td>${s.budget?Math.round(s.actual/s.budget*100):0}%</td><td><button class="btn" onclick="event.stopPropagation();show('boq')">View BOQ</button></td></tr>`}).join('');
@@ -246,6 +316,7 @@ table('snags','Snagging',['ID','Project','Item','Priority','Status','Actions'],s
 table('expenses','Expenses / Petty Cash',['Date','Project','Category','Description','Amount','Actions'],e,`<button class="btn primary" onclick="openModal('expense')">+ Expense</button>`)
 ].join('');
 updateProjectContext();
+bindInlineEditors();
 }
 const opts=()=>data.projects.map(p=>`<option>${p.name}</option>`).join('');
 function openModal(t){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';

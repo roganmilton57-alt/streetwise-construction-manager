@@ -453,6 +453,18 @@ async function loadCloudWorkspace(){
     end_date:x.end_date
   }));
 
+  const legacyMaterials=Array.isArray(data.materials)?structuredClone(data.materials):[];
+  const mat=await sb.from('material_records').select('id,project_id,name,unit,stock,reorder,unit_cost').eq('company_id',currentCompany.company_id).order('created_at',{ascending:true});
+  if(mat.error){cloudLoadError='Materials database load failed: '+mat.error.message;return false;}
+  if(!(mat.data||[]).length && legacyMaterials.length){
+    const rows=legacyMaterials.map(x=>({company_id:currentCompany.company_id,project_id:x.project_id||null,name:x.name,unit:x.unit,stock:Number(x.stock||0),reorder:Number(x.reorder||0),unit_cost:Number(x.unitCost||x.unit_cost||0),created_by:currentUser.id}));
+    const migrated=await sb.from('material_records').insert(rows).select('id,project_id,name,unit,stock,reorder,unit_cost');
+    if(migrated.error){cloudLoadError='Materials migration failed: '+migrated.error.message;return false;}
+    mat.data=migrated.data||[];
+  }
+  const materialProjectNames=new Map(data.projects.map(x=>[x.db_id,x.name]));
+  data.materials=(mat.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'General / Company Stock',name:x.name||'',unit:x.unit||'',stock:Number(x.stock||0),reorder:Number(x.reorder||0),unitCost:Number(x.unit_cost||0)}));
+
   const b=await sb.from('boq_items')
     .select('id,project_id,code,description,budget,actual,progress')
     .eq('company_id',currentCompany.company_id)

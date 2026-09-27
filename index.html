@@ -121,18 +121,120 @@ if(t==='snag')h=`<div class="form"><label>Project<select id="f1">${opts()}</sele
 if(t==='expense')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Category<select id="f2"><option>Petty Cash</option><option>Transport</option><option>Site</option><option>Tools</option><option>Other</option></select></label><label>Description<input id="f3"></label><label>Amount (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('expense')">Add Expense</button></div>`;
 document.getElementById('modalBody').innerHTML=h;document.getElementById('modal').classList.add('open')}
 function closeModal(){document.getElementById('modal').classList.remove('open')}const v=i=>document.getElementById(i).value;
-function add(t){let today=new Date().toISOString().slice(0,10);
-if(t==='project')data.projects.push({id:Date.now(),name:v('f1'),client:v('f2'),location:v('f3'),budget:+v('f4'),spent:0,progress:0,status:'Active'});
-if(t==='boq')data.boq.push({code:v('f1'),description:v('f2'),budget:+v('f3'),actual:+v('f4'),progress:+v('f5')});
-if(t==='material')data.materials.push({name:v('f1'),unit:v('f2'),stock:+v('f3'),reorder:+v('f4'),unitCost:+v('f5')});
-if(t==='labour')data.labour.push({trade:v('f1'),workers:+v('f2'),rate:+v('f3'),days:+v('f4')});
-if(t==='procurement')data.procurement.push({item:v('f1'),supplier:v('f2'),qty:v('f3'),value:+v('f4'),status:v('f5')});
-if(t==='progress'){let p=data.projects.find(x=>x.name===v('f1'));if(p){p.progress=+v('f2');p.spent=+v('f3')}}
-if(t==='variation')data.variations.push({ref:'VO-'+String(data.variations.length+1).padStart(3,'0'),project:v('f1'),description:v('f2'),value:+v('f3'),status:v('f4')});
-if(t==='report')data.reports.unshift({date:today,project:v('f1'),type:v('f2'),author:v('f3'),status:'Submitted'});
-if(t==='snag')data.snags.unshift({id:'SN-'+String(data.snags.length+17).padStart(3,'0'),project:v('f1'),item:v('f2'),priority:v('f3'),status:'Open'});
-if(t==='expense')data.expenses.unshift({date:today,project:v('f1'),category:v('f2'),description:v('f3'),amount:+v('f4')});
-save();closeModal();render();show('dashboard');toast('Saved successfully')}
+async function add(t){
+  let today=new Date().toISOString().slice(0,10);
+
+  if(t==='project'){
+    const project={
+      id:Date.now(),
+      name:v('f1'),
+      client:v('f2'),
+      location:v('f3'),
+      budget:+v('f4'),
+      spent:0,
+      progress:0,
+      status:'Active'
+    };
+
+    if(cloudReady && currentCompany){
+      const r=await sb.from('project_records').insert({
+        company_id:currentCompany.company_id,
+        name:project.name,
+        client:project.client,
+        location:project.location,
+        status:project.status,
+        contract_value:project.budget,
+        created_by:currentUser.id
+      }).select('id').single();
+
+      if(r.error){
+        toast('Project database save failed: '+r.error.message);
+        return;
+      }
+
+      project.db_id=r.data.id;
+    }
+
+    data.projects.push(project);
+  }
+
+  if(t==='boq')data.boq.push({
+    code:v('f1'),
+    description:v('f2'),
+    budget:+v('f3'),
+    actual:+v('f4'),
+    progress:+v('f5')
+  });
+
+  if(t==='material')data.materials.push({
+    name:v('f1'),
+    unit:v('f2'),
+    stock:+v('f3'),
+    reorder:+v('f4'),
+    unitCost:+v('f5')
+  });
+
+  if(t==='labour')data.labour.push({
+    trade:v('f1'),
+    workers:+v('f2'),
+    rate:+v('f3'),
+    days:+v('f4')
+  });
+
+  if(t==='procurement')data.procurement.push({
+    item:v('f1'),
+    supplier:v('f2'),
+    qty:v('f3'),
+    value:+v('f4'),
+    status:v('f5')
+  });
+
+  if(t==='progress'){
+    let p=data.projects.find(x=>x.name===v('f1'));
+    if(p){
+      p.progress=+v('f2');
+      p.spent=+v('f3');
+    }
+  }
+
+  if(t==='variation')data.variations.push({
+    ref:'VO-'+String(data.variations.length+1).padStart(3,'0'),
+    project:v('f1'),
+    description:v('f2'),
+    value:+v('f3'),
+    status:v('f4')
+  });
+
+  if(t==='report')data.reports.unshift({
+    date:today,
+    project:v('f1'),
+    type:v('f2'),
+    author:v('f3'),
+    status:'Submitted'
+  });
+
+  if(t==='snag')data.snags.unshift({
+    id:'SN-'+String(data.snags.length+17).padStart(3,'0'),
+    project:v('f1'),
+    item:v('f2'),
+    priority:v('f3'),
+    status:'Open'
+  });
+
+  if(t==='expense')data.expenses.unshift({
+    date:today,
+    project:v('f1'),
+    category:v('f2'),
+    description:v('f3'),
+    amount:+v('f4')
+  });
+
+  save();
+  closeModal();
+  render();
+  show('dashboard');
+  toast('Saved successfully');
+}
 function exportData(){let b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='streetwise-data.json';a.click();toast('Data exported')}
 let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBtn').classList.add('show')});
 async function installApp(){if(!deferredPrompt){toast('Use your browser menu to install this app');return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBtn').classList.remove('show')}

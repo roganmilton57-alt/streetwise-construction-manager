@@ -693,8 +693,12 @@ let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.prev
 async function installApp(){if(!deferredPrompt){toast('Use your browser menu to install this app');return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBtn').classList.remove('show')}
 window.addEventListener('appinstalled',()=>toast('Streetwise installed'));
 async function boot(){
-  nav(); restoreNavigation(); render(); show(currentModuleId||'projects');
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=5');
+  nav();
+  // Do not call show()/saveNavigation() before Supabase restores the session.
+  // Otherwise currentCompany is still null and the saved navigation is overwritten.
+  restoreNavigation();
+  render();
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=6');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

@@ -80,8 +80,8 @@ const emptyWorkspace={projects:[],materialCategories:[],materials:[],materialUsa
 let data=structuredClone(emptyWorkspace);let currentProjectId=null;let currentModuleId='dashboard';let currentMaterialCategory='All';let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false, cloudLoadError='';
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
 let save=()=>localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
-function saveNavigation(){try{localStorage.setItem('streetwiseNavigation',JSON.stringify({projectId:currentProjectId,moduleId:currentModuleId,materialCategory:currentMaterialCategory}));}catch(e){}}
-function restoreNavigation(){try{const n=JSON.parse(localStorage.getItem('streetwiseNavigation')||'null');if(n){currentProjectId=n.projectId||null;currentModuleId=n.moduleId||'projects';currentMaterialCategory=n.materialCategory||'All';}}catch(e){}}
+function saveNavigation(){try{localStorage.setItem('streetwiseNavigation',JSON.stringify({companyId:currentCompany?.company_id||null,projectId:currentProjectId,moduleId:currentModuleId,materialCategory:currentMaterialCategory}));}catch(e){}}
+function restoreNavigation(){try{const n=JSON.parse(localStorage.getItem('streetwiseNavigation')||'null');if(n){currentProjectId=n.projectId||null;currentModuleId=n.moduleId||'projects';currentMaterialCategory=n.materialCategory||'All';return n;}}catch(e){}return null}
 window.addEventListener('pagehide',saveNavigation);
 window.addEventListener('beforeunload',saveNavigation);
 function toast(t){let e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
@@ -667,12 +667,13 @@ async function add(t){
     amount:+v('f4')
   });
 
-  save();
-  closeModal();
   const returnModule=currentModuleId;
   const returnProject=currentProjectId;
-  render();
+  saveNavigation();
+  save();
+  closeModal();
   currentProjectId=returnProject;
+  render();
   show(returnModule);
   toast('Saved successfully');
 }
@@ -695,7 +696,11 @@ function setAuthStatus(t){const e=document.getElementById('authStatus'); if(e)e.
 function showAuth(v){document.getElementById('authScreen').style.display=v?'flex':'none'; if(v) document.getElementById('companyScreen').style.display='none'}
 function toggleAuthMode(){authMode=authMode==='signin'?'signup':'signin';document.getElementById('authTitle').textContent=authMode==='signin'?'Sign in':'Create your account';document.getElementById('authSub').textContent=authMode==='signin'?'Access your construction projects from phone or PC.':'Create the first user account for your Streetwise company.';document.getElementById('nameWrap').style.display=authMode==='signup'?'grid':'none';document.getElementById('authSubmit').textContent=authMode==='signin'?'Sign in':'Create account';document.getElementById('authToggle').textContent=authMode==='signin'?'Create an account':'Back to sign in';setAuthStatus('')}
 async function submitAuth(){if(!sb){setAuthStatus('Supabase is not configured.');return}const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value,name=document.getElementById('authName').value.trim();if(!email||!password){setAuthStatus('Enter email and password.');return}setAuthStatus('Working…');let r;if(authMode==='signup')r=await sb.auth.signUp({email,password,options:{data:{full_name:name}}});else r=await sb.auth.signInWithPassword({email,password});if(r.error){setAuthStatus(r.error.message);return}if(authMode==='signup'&&!r.data.session){setAuthStatus('Account created. Check your email to confirm, then sign in.');return}if(r.data.user)await onSignedIn(r.data.user)}
-async function onSignedIn(user){currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);const r=await sb.rpc('my_companies');if(r.error){showAuth(true);setAuthStatus(r.error.message);return}if(!r.data?.length){document.getElementById('companyScreen').style.display='flex';return}currentCompany=r.data[0];const ok=await loadCloudWorkspace();if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Cloud workspace connected')}
+async function onSignedIn(user){currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);const savedNav=restoreNavigation();const r=await sb.rpc('my_companies');if(r.error){showAuth(true);setAuthStatus(r.error.message);return}if(!r.data?.length){document.getElementById('companyScreen').style.display='flex';return}currentCompany=r.data[0];const ok=await loadCloudWorkspace();if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}cloudReady=true;document.getElementById('companyScreen').style.display='none';
+  const savedProject=data.projects.find(p=>String(p.db_id||p.id||'')===String(savedNav?.projectId||''));
+  if(savedNav?.companyId===currentCompany.company_id){currentProjectId=savedProject?(savedProject.db_id||savedProject.id):null;currentModuleId=modules.some(m=>m[0]===savedNav.moduleId)?savedNav.moduleId:'projects';currentMaterialCategory=savedNav.materialCategory||'All';}
+  else{currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';}
+  saveNavigation();render();show(currentModuleId);document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Cloud workspace connected')}
 async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
 async function loadCloudWorkspace(){
   cloudLoadError='';

@@ -76,7 +76,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 </div>
 <script>
 const modules=[['projects','🏗️','My Projects'],['dashboard','📊','Company Overview'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
-const emptyWorkspace={projects:[],materials:[],labour:[],boq:[],procurement:[],variations:[],expenses:[],snags:[],reports:[]};
+const emptyWorkspace={projects:[],materials:[],materialUsage:[],labour:[],boq:[],procurement:[],variations:[],expenses:[],snags:[],reports:[]};
 let data=structuredClone(emptyWorkspace);let currentProjectId=null;let currentModuleId='dashboard';let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false, cloudLoadError='';
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
 let save=()=>localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
@@ -171,7 +171,7 @@ if(currentProjectId){
  <div class="section two"><div class="card"><div class="section-head"><h2>Open Snags</h2><button class="btn" onclick="show('snags')">Open</button></div>${snags.filter(s=>s.status!=='Closed').slice(0,5).map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.id}</div></div><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></div>`).join('')||'<div class="empty">No open snags.</div>'}</div>
  <div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${exps.slice(0,5).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.date} · ${x.category}</div></div><strong>${money(x.amount)}</strong></div>`).join('')||'<div class="empty">No expenses.</div>'}</div></div>`)
 }
-let visibleProjects=currentProject()?projectRows(data.projects):data.projects;let visibleMaterials=currentProject()?projectRows(data.materials):data.materials;let budget=visibleProjects.reduce((a,p)=>a+projectBoqStats(p.db_id||p.id).budget,0),spent=visibleProjects.reduce((a,p)=>a+projectActualCost(p.db_id||p.id),0),alerts=visibleMaterials.filter(m=>materialBalance(m)<=Number(m.reorder||0)).length,open=projectRows(data.snags).filter(s=>s.status!=='Closed').length;return shell('dashboard',`${projectSelector()}
+let visibleProjects=currentProject()?projectRows(data.projects):data.projects;let materialSummaries=materialSummaryRows();let budget=visibleProjects.reduce((a,p)=>a+projectBoqStats(p.db_id||p.id).budget,0),spent=visibleProjects.reduce((a,p)=>a+projectActualCost(p.db_id||p.id),0),alerts=materialSummaries.filter(m=>m.reorder>0&&m.balance<=m.reorder).length,open=projectRows(data.snags).filter(s=>s.status!=='Closed').length;return shell('dashboard',`${projectSelector()}
 <div class="grid">
 <div class="card metric"><small>Active Projects</small><div class="num">${data.projects.filter(p=>p.status==='Active').length}</div><div class="note up">● ${data.projects.length} total projects</div></div>
 <div class="card metric"><small>Portfolio Budget</small><div class="num">${money(budget)}</div><div class="note">${budget?Math.round(spent/budget*100):0}% committed/spent</div></div>
@@ -186,6 +186,14 @@ let visibleProjects=currentProject()?projectRows(data.projects):data.projects;le
 <div class="section two"><div class="card"><div class="section-head"><h2>Procurement Watch</h2><button class="btn" onclick="show('procurement')">Open</button></div>${data.procurement.map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.supplier} · ${x.qty}</div></div><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></div>`).join('')}</div>
 <div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${data.expenses.slice(0,4).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.project} · ${x.date}</div></div><strong>${money(x.amount)}</strong></div>`).join('')}</div></div>`)
 }
+function materialsSection(receipts,summary,usage){return shell('materials',`
+<div class="section two">
+<div class="card"><div class="section-head"><h2>Stock Summary</h2><div class="module-tools"><button class="btn" onclick="openModal('materialUsage')">− Record Usage</button><button class="btn primary" onclick="openModal('material')">+ Add Receipt</button></div></div><div class="muted" style="margin-bottom:10px">Balance = total received across all deliveries − total recorded usage.</div><div style="overflow:auto"><table><thead><tr><th>Material</th><th>Project</th><th>Unit</th><th>Total Received</th><th>Total Used</th><th>Balance</th><th>Avg Cost</th><th>Receipt Value</th><th>Stock</th></tr></thead><tbody>${summary||`<tr><td colspan="9" class="empty">No stock records.</td></tr>`}</tbody></table></div></div>
+</div>
+<div class="section two">
+<div class="card"><div class="section-head"><h2>Material Receipts</h2><span class="muted">Every delivery stays as its own record</span></div><div style="overflow:auto"><table><thead><tr>${['Date','Project','Material','Unit','Qty Received','Unit Cost','Total Cost','Supplier','Notes','Actions'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${receipts||`<tr><td colspan="10" class="empty">No receipts.</td></tr>`}</tbody></table></div></div>
+<div class="card"><div class="section-head"><h2>Material Usage</h2><span class="muted">Usage deductions are separate from receipts</span></div><div style="overflow:auto"><table><thead><tr><th>Date</th><th>Project</th><th>Material</th><th>Unit</th><th>Qty Used</th><th>Used For</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${usage||`<tr><td colspan="8" class="empty">No usage recorded.</td></tr>`}</tbody></table></div></div>
+</div>`)}
 function table(id,title,headers,rows,action){return shell(id,`<div class="card"><div class="section-head"><h2>${title}</h2><div class="module-tools">${action||''}</div></div><div style="overflow:auto"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${headers.length}" class="empty">No records.</td></tr>`}</tbody></table></div></div>`)}
 function num(v){return Number.isFinite(Number(v))?Number(v).toLocaleString('en-KE',{maximumFractionDigits:2}):'0'}
 function formatPct(v){return `${Number(v||0).toFixed(1)}%`}
@@ -210,11 +218,32 @@ function materialBalance(x){
   if(Number.isFinite(received) && received>=0) return received-(Number.isFinite(used)?used:0);
   return Number(x.stock||0);
 }
+function materialKey(x){return `${String(x.project_id||'')}|${String(x.name||'').trim().toLowerCase()}|${String(x.unit||'').trim().toLowerCase()}`}
+function materialSummaryRows(){
+  const receipts=projectRows(data.materials);
+  const usage=projectRows(data.materialUsage||[]);
+  const map=new Map();
+  receipts.forEach(r=>{
+    const key=materialKey(r);
+    if(!map.has(key)) map.set(key,{key,project_id:r.project_id||null,project:r.project||'General / Company Stock',name:r.name||'',unit:r.unit||'',received:0,value:0,usage:0,reorder:Number(r.reorder||0)});
+    const g=map.get(key);
+    g.received+=Number(r.qtyReceived||0);
+    g.value+=materialTotalCost(r);
+    g.reorder=Math.max(g.reorder,Number(r.reorder||0));
+  });
+  usage.forEach(u=>{
+    const key=materialKey(u);
+    if(!map.has(key)) map.set(key,{key,project_id:u.project_id||null,project:u.project||'General / Company Stock',name:u.name||'',unit:u.unit||'',received:0,value:0,usage:0,reorder:0});
+    map.get(key).usage+=Number(u.quantity||0);
+  });
+  return [...map.values()].map(g=>{g.balance=g.received-g.usage;g.avgCost=g.received?g.value/g.received:0;return g}).sort((a,b)=>a.name.localeCompare(b.name));
+}
 function projectMaterialStats(pid){
   const rows=data.materials.filter(x=>String(x.project_id||'')===String(pid));
   const cost=rows.reduce((a,x)=>a+materialTotalCost(x),0);
-  const balance=rows.reduce((a,x)=>a+materialBalance(x),0);
-  return {rows,cost,balance};
+  const summaries=materialSummaryRows().filter(x=>String(x.project_id||'')===String(pid));
+  const balance=summaries.reduce((a,x)=>a+x.balance,0);
+  return {rows,cost,balance,summaries};
 }
 function projectActualCost(pid){
   const boqActual=projectBoqStats(pid).actual;
@@ -263,7 +292,6 @@ async function inlineSave(el){
       else if(field==='unit')x.unit=String(value),patch.unit=x.unit;
       else if(field==='qtyReceived')x.qtyReceived=Number(value),patch.qty_received=x.qtyReceived;
       else if(field==='unitCost')x.unitCost=Number(value),patch.unit_cost=x.unitCost;
-      else if(field==='qtyUsed')x.qtyUsed=Number(value),patch.qty_used=x.qtyUsed;
       else if(field==='supplier')x.supplier=String(value),patch.supplier=x.supplier;
       else if(field==='notes')x.notes=String(value),patch.notes=x.notes;
       else return;
@@ -293,7 +321,9 @@ let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
 const act=(t,x)=>`<td><div class="module-tools"><button class="btn" onclick="event.stopPropagation();editRecord('${t}','${x.db_id||x.id}')">Edit</button>${t==='progress'?'':`<button class="btn" onclick="event.stopPropagation();deleteRecord('${t}','${x.db_id||x.id}')">Delete</button>`}</div></td>`;
 let p=visibleProjects.map(x=>`<tr onclick="openProject('${x.db_id||x.id}')" style="cursor:pointer"><td><strong>${x.name}</strong></td><td>${x.client}</td><td>${x.location}</td><td>${money(x.budget)}</td><td>${x.progress||0}%</td><td><span class="pill ${x.status==='Active'?'green':'orange'}">${x.status}</span></td>${act('project',x)}</tr>`).join('');
 let b=projectRows(data.boq).map(x=>{const amount=boqAmount(x),work=boqWorkValue(x);return `<tr><td>${x.project||''}</td><td>${inlineCell('boq',x,'code',x.code)}</td><td><strong>${inlineCell('boq',x,'description',x.description)}</strong></td><td>${inlineCell('boq',x,'unit',x.unit||'')}</td><td>${inlineCell('boq',x,'quantity',num(x.quantity),{numeric:true,step:'0.01'})}</td><td>${inlineCell('boq',x,'rate',num(x.rate),{numeric:true,step:'0.01'})}</td><td>${money(amount)}</td><td>${inlineCell('boq',x,'actual',num(x.actual),{numeric:true,step:'0.01'})}</td><td class="${x.actual>amount?'down':'up'}">${money(amount-x.actual)}</td><td>${inlineCell('boq',x,'progress',formatPct(x.progress),{numeric:true,step:'0.01'})}</td><td>${money(work)}</td>${act('boq',x)}</tr>`}).join('');
-let m=projectRows(data.materials).map(x=>`<tr><td>${inlineCell('material',x,'date',x.date||'')}</td><td>${x.project||'General / Company Stock'}</td><td><strong>${inlineCell('material',x,'name',x.name)}</strong></td><td>${inlineCell('material',x,'unit',x.unit||'')}</td><td>${inlineCell('material',x,'qtyReceived',num(x.qtyReceived||0),{numeric:true,step:'0.01'})}</td><td>${inlineCell('material',x,'unitCost',num(x.unitCost||0),{numeric:true,step:'0.01'})}</td><td>${money(materialTotalCost(x))}</td><td>${inlineCell('material',x,'qtyUsed',num(x.qtyUsed||0),{numeric:true,step:'0.01'})}</td><td>${num(materialBalance(x))}</td><td>${inlineCell('material',x,'supplier',x.supplier||'')}</td><td>${inlineCell('material',x,'notes',x.notes||'')}</td>${act('material',x)}</tr>`).join('');
+let m=projectRows(data.materials).map(x=>`<tr><td>${inlineCell('material',x,'date',x.date||'')}</td><td>${x.project||'General / Company Stock'}</td><td><strong>${inlineCell('material',x,'name',x.name)}</strong></td><td>${inlineCell('material',x,'unit',x.unit||'')}</td><td>${inlineCell('material',x,'qtyReceived',num(x.qtyReceived||0),{numeric:true,step:'0.01'})}</td><td>${inlineCell('material',x,'unitCost',num(x.unitCost||0),{numeric:true,step:'0.01'})}</td><td>${money(materialTotalCost(x))}</td><td>${inlineCell('material',x,'supplier',x.supplier||'')}</td><td>${inlineCell('material',x,'notes',x.notes||'')}</td>${act('material',x)}</tr>`).join('');
+let ms=materialSummaryRows().map(x=>`<tr><td><strong>${inlineEsc(x.name)}</strong></td><td>${inlineEsc(x.project)}</td><td>${inlineEsc(x.unit)}</td><td>${num(x.received)}</td><td>${num(x.usage)}</td><td><strong>${num(x.balance)}</strong></td><td>${money(x.avgCost)}</td><td>${money(x.value)}</td><td>${x.reorder>0&&x.balance<=x.reorder?'<span class="pill red">Reorder</span>':'<span class="pill green">OK</span>'}</td></tr>`).join('');
+let mu=projectRows(data.materialUsage||[]).sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>`<tr><td>${inlineEsc(x.date||'')}</td><td>${inlineEsc(x.project||'General / Company Stock')}</td><td><strong>${inlineEsc(x.name||'')}</strong></td><td>${inlineEsc(x.unit||'')}</td><td>${num(x.quantity||0)}</td><td>${inlineEsc(x.usedFor||'')}</td><td>${inlineEsc(x.notes||'')}</td><td><button class="btn" onclick="deleteMaterialUsage('${x.db_id||x.id}')">Delete</button></td></tr>`).join('');
 let l=projectRows(data.labour).map(x=>`<tr><td><strong>${x.trade}</strong></td><td>${x.workers}</td><td>${money(x.rate)}</td><td>${x.days}</td><td>${money(x.workers*x.rate*x.days)}</td>${act('labour',x)}</tr>`).join('');
 let q=projectRows(data.procurement).map(x=>`<tr><td><strong>${x.item}</strong></td><td>${x.supplier}</td><td>${x.qty}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></td>${act('procurement',x)}</tr>`).join('');
 let pr=visibleProjects.map(x=>{const s=projectBoqStats(x.db_id||x.id);return `<tr><td><strong>${x.name}</strong></td><td style="min-width:110px"><div class="bar"><i style="width:${Math.min(100,s.progress)}%"></i></div><small>${formatPct(s.progress)}</small></td><td>${money(s.budget)}</td><td>${money(s.actual)}</td><td>${s.budget?Math.round(s.actual/s.budget*100):0}%</td><td><button class="btn" onclick="event.stopPropagation();show('boq')">View BOQ</button></td></tr>`}).join('');
@@ -306,7 +336,7 @@ document.getElementById('modules').innerHTML=[
 dashboard(),
 projectsHome(),
 table('boq','BOQ & Cost Control',['Project','Item','Description','Unit','Qty','Rate','Amount','Actual Cost','Variance','% Complete','Work Value','Actions'],b,`<button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
-table('materials','Materials & Stock',['Date','Project','Material','Unit','Qty Received','Unit Cost','Total Cost','Qty Used','Balance','Supplier','Notes','Actions'],m,`<button class="btn primary" onclick="openModal('material')">+ Material</button>`),
+materialsSection(m,ms,mu),
 table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost','Actions'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),
 table('procurement','Procurement',['Item','Supplier','Quantity','Value','Status','Actions'],q,`${scopedNote}<button class="btn primary" onclick="openModal('procurement')">+ Purchase</button>`),
 table('progress','Progress Tracking',['Project','Physical Progress','BOQ Budget','Actual Cost','Spend %','Action'],pr,``),
@@ -319,10 +349,11 @@ updateProjectContext();
 bindInlineEditors();
 }
 const opts=()=>data.projects.map(p=>`<option>${p.name}</option>`).join('');
-function openModal(t){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';
+function openModal(t){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',materialUsage:'Record Material Usage',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';
 if(t==='project')h=`<div class="form"><label>Project name<input id="f1" placeholder="e.g. Karen Villas"></label><label>Client<input id="f2"></label><label>Location<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Active</option><option>On Hold</option><option>Completed</option></select></label><button class="btn primary" onclick="add('project')">Create Project</button></div>`;
 if(t==='boq')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Item / Code<input id="f2"></label><label>Description<input id="f3"></label><label>Unit<input id="f4" placeholder="m², m³, No."></label><label>Quantity<input id="f5" type="number" step="0.01" min="0"></label><label>Rate (KES)<input id="f6" type="number" step="0.01" min="0"></label><label>% Complete<input id="f7" type="number" step="0.01" min="0" max="100" value="0"></label><div class="muted" style="font-size:11px">Amount and Work Value are calculated automatically.</div><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
-if(t==='material')h=`<div class="form"><label>Date<input id="f1" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Project<select id="f2"><option value="">General / Company Stock</option>${data.projects.map(p=>`<option value="${p.name}" ${currentProject()&&currentProject().name===p.name?'selected':''}>${p.name}</option>`).join('')}</select></label><label>Material<input id="f3" placeholder="e.g. Cement"></label><label>Unit<input id="f4" placeholder="Bags, Tonnes, m³"></label><label>Qty Received<input id="f5" type="number" step="0.01" min="0"></label><label>Unit Cost (KES)<input id="f6" type="number" step="0.01" min="0"></label><label>Qty Used<input id="f7" type="number" step="0.01" min="0" value="0"></label><label>Supplier<input id="f8"></label><label>Reorder Level<input id="f9" type="number" step="0.01" min="0" value="0"></label><label>Notes<textarea id="f10" rows="2"></textarea></label><div class="muted" style="font-size:11px">Total Cost and Balance are calculated automatically.</div><button class="btn primary" onclick="add('material')">Add Material</button></div>`;
+if(t==='material')h=`<div class="form"><label>Date<input id="f1" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Project<select id="f2"><option value="">General / Company Stock</option>${data.projects.map(p=>`<option value="${p.name}" ${currentProject()&&currentProject().name===p.name?'selected':''}>${p.name}</option>`).join('')}</select></label><label>Material<input id="f3" placeholder="e.g. Cement"></label><label>Unit<input id="f4" placeholder="Bags, Tonnes, m³"></label><label>Qty Received<input id="f5" type="number" step="0.01" min="0"></label><label>Unit Cost (KES)<input id="f6" type="number" step="0.01" min="0"></label><label>Supplier<input id="f8"></label><label>Reorder Level<input id="f9" type="number" step="0.01" min="0" value="0"></label><label>Notes<textarea id="f10" rows="2"></textarea></label><div class="muted" style="font-size:11px">Total Cost is calculated automatically. Stock usage is recorded separately so receipt rows never need to be edited.</div><button class="btn primary" onclick="add('material')">Add Receipt</button></div>`;
+if(t==='materialUsage')h=`<div class="form"><label>Date<input id="u1" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Project<select id="u2"><option value="">General / Company Stock</option>${data.projects.map(p=>`<option value="${p.name}" ${currentProject()&&currentProject().name===p.name?'selected':''}>${p.name}</option>`).join('')}</select></label><label>Material<select id="u3">${materialSummaryRows().filter(x=>!currentProject()||String(x.project_id||'')===String(currentProject().db_id||currentProject().id)).map(x=>`<option value="${inlineEsc(x.name)}">${inlineEsc(x.name)} (${num(x.balance)} ${inlineEsc(x.unit)})</option>`).join('')}</select></label><label>Quantity Used<input id="u4" type="number" step="0.01" min="0"></label><label>Used For<input id="u5" placeholder="e.g. Blockwork"></label><label>Notes<textarea id="u6" rows="2"></textarea></label><div class="muted" style="font-size:11px">Usage is deducted from the material's combined balance across all receipt rows.</div><button class="btn primary" onclick="addMaterialUsage()">Record Usage</button></div>`;
 if(t==='labour')h=`<div class="form"><label>Trade<input id="f1"></label><label>Workers<input id="f2" type="number"></label><label>Daily rate (KES)<input id="f3" type="number"></label><label>Days<input id="f4" type="number"></label><button class="btn primary" onclick="add('labour')">Add Record</button></div>`;
 if(t==='procurement')h=`<div class="form"><label>Item<input id="f1"></label><label>Supplier<input id="f2"></label><label>Quantity<input id="f3"></label><label>Value (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Pending</option><option>Ordered</option><option>Delivered</option></select></label><button class="btn primary" onclick="add('procurement')">Add Purchase</button></div>`;
 if(t==='progress')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><div class="muted">Overall physical progress is calculated automatically from BOQ Work Value. Use the Progress module for planned vs actual programme percentages.</div><button class="btn" onclick="closeModal();show('boq')">Open BOQ</button></div>`;
@@ -340,7 +371,7 @@ function editRecord(t,id){
   const set=(n,val)=>{const e=document.getElementById(n);if(e)e.value=val??''};
   if(t==='project'){set('f1',x.name);set('f2',x.client);set('f3',x.location);set('f4',x.budget);set('f5',x.status||'Active');}
   if(t==='boq'){set('f1',x.project);set('f2',x.code);set('f3',x.description);set('f4',x.unit);set('f5',x.quantity);set('f6',x.rate);set('f7',x.progress);}
-  if(t==='material'){set('f1',x.date||new Date().toISOString().slice(0,10));set('f2',x.project);set('f3',x.name);set('f4',x.unit);set('f5',x.qtyReceived??x.stock);set('f6',x.unitCost);set('f7',x.qtyUsed||0);set('f8',x.supplier||'');set('f9',x.reorder||0);set('f10',x.notes||'');}
+  if(t==='material'){set('f1',x.date||new Date().toISOString().slice(0,10));set('f2',x.project);set('f3',x.name);set('f4',x.unit);set('f5',x.qtyReceived??x.stock);set('f6',x.unitCost);set('f8',x.supplier||'');set('f9',x.reorder||0);set('f10',x.notes||'');}
   if(t==='labour'){set('f1',x.trade);set('f2',x.workers);set('f3',x.rate);set('f4',x.days);}
   if(t==='procurement'){set('f1',x.item);set('f2',x.supplier);set('f3',x.qty);set('f4',x.value);set('f5',x.status);}
   if(t==='progress'){set('f1',x.name);set('f2',x.progress);set('f3',x.spent);}
@@ -361,8 +392,8 @@ async function updateRecord(t,id){
     if(cloudReady&&x.db_id){const r=await sb.from('boq_items').update({project_id:x.project_id,code:x.code,description:x.description,unit:x.unit,quantity:x.quantity,rate:x.rate,budget:x.budget,actual:Number(x.actual||0),progress:x.progress,work_value:boqWorkValue(x),updated_at:new Date().toISOString()}).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('BOQ update failed: '+r.error.message);return}}
   }
   if(t==='material'){
-    const pn=v('f2');const p=data.projects.find(q=>q.name===pn);x.date=v('f1');x.project=pn||'General / Company Stock';x.project_id=p?.db_id||p?.id||null;x.name=v('f3');x.unit=v('f4');x.qtyReceived=+v('f5');x.unitCost=+v('f6');x.qtyUsed=+v('f7');x.supplier=v('f8');x.reorder=+v('f9');x.notes=v('f10');x.stock=materialBalance(x);x.totalCost=materialTotalCost(x);
-    if(cloudReady&&x.db_id){const r=await sb.from('material_records').update({project_id:x.project_id,transaction_date:x.date,name:x.name,unit:x.unit,qty_received:x.qtyReceived,unit_cost:x.unitCost,total_cost:x.totalCost,supplier:x.supplier,qty_used:x.qtyUsed,stock:x.stock,reorder:x.reorder,notes:x.notes,updated_at:new Date().toISOString()}).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('Material update failed: '+r.error.message);return}}
+    const pn=v('f2');const p=data.projects.find(q=>q.name===pn);x.date=v('f1');x.project=pn||'General / Company Stock';x.project_id=p?.db_id||p?.id||null;x.name=v('f3');x.unit=v('f4');x.qtyReceived=+v('f5');x.unitCost=+v('f6');x.qtyUsed=0;x.supplier=v('f8');x.reorder=+v('f9');x.notes=v('f10');x.stock=x.qtyReceived;x.totalCost=materialTotalCost(x);
+    if(cloudReady&&x.db_id){const r=await sb.from('material_records').update({project_id:x.project_id,transaction_date:x.date,name:x.name,unit:x.unit,qty_received:x.qtyReceived,unit_cost:x.unitCost,total_cost:x.totalCost,supplier:x.supplier,qty_used:0,stock:x.stock,reorder:x.reorder,notes:x.notes,updated_at:new Date().toISOString()}).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('Material update failed: '+r.error.message);return}}
   }
   if(t==='labour'){x.trade=v('f1');x.workers=+v('f2');x.rate=+v('f3');x.days=+v('f4');}
   if(t==='procurement'){x.item=v('f1');x.supplier=v('f2');x.qty=v('f3');x.value=+v('f4');x.status=v('f5');}
@@ -392,6 +423,23 @@ async function deleteRecord(t,id){
   const destination=(t==='project' && !currentProjectId)?'projects':returnModule;
   show(destination);
   toast('Deleted successfully');
+}
+async function addMaterialUsage(){
+  const date=document.getElementById('u1').value, projectName=document.getElementById('u2').value, name=document.getElementById('u3').value, quantity=Number(document.getElementById('u4').value||0), usedFor=document.getElementById('u5').value, notes=document.getElementById('u6').value;
+  if(!name||!Number.isFinite(quantity)||quantity<=0){toast('Enter a material and a quantity greater than zero');return;}
+  const p=data.projects.find(x=>x.name===projectName);
+  const summary=materialSummaryRows().find(x=>x.name.toLowerCase()===name.toLowerCase()&&String(x.project_id||'')===String(p?.db_id||p?.id||''));
+  if(summary && quantity>summary.balance){toast(`Usage exceeds available balance of ${num(summary.balance)} ${summary.unit}`);return;}
+  const item={date,project:projectName||'General / Company Stock',project_id:p?.db_id||p?.id||null,name,unit:summary?.unit||'',quantity,usedFor,notes};
+  if(cloudReady&&currentCompany){const r=await sb.from('material_usage_records').insert({company_id:currentCompany.company_id,project_id:item.project_id,usage_date:item.date,material:item.name,unit:item.unit,quantity:item.quantity,used_for:item.usedFor,notes:item.notes,created_by:currentUser.id}).select('id').single();if(r.error){toast('Material usage save failed: '+r.error.message);return;}item.db_id=r.data.id;}
+  data.materialUsage.push(item);save();closeModal();render();show('materials');toast('Material usage recorded');
+}
+async function deleteMaterialUsage(id){
+  const returnProjectId=currentProjectId;
+  const x=(data.materialUsage||[]).find(y=>String(y.db_id||y.id)===String(id)); if(!x)return;
+  if(!confirm(`Delete usage of ${x.quantity} ${x.unit||''} ${x.name}?`))return;
+  if(cloudReady&&x.db_id){const r=await sb.from('material_usage_records').delete().eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){toast('Delete failed: '+r.error.message);return;}}
+  data.materialUsage=data.materialUsage.filter(y=>String(y.db_id||y.id)!==String(id));save();render();currentProjectId=returnProjectId;show('materials');toast('Usage deleted');
 }
 function closeModal(){document.getElementById('modal').classList.remove('open')}const v=i=>document.getElementById(i).value;
 async function add(t){
@@ -492,7 +540,7 @@ async function add(t){
       unit:v('f4'),
       qtyReceived:+v('f5'),
       unitCost:+v('f6'),
-      qtyUsed:+v('f7'),
+      qtyUsed:0,
       supplier:v('f8'),
       reorder:+v('f9'),
       notes:v('f10')
@@ -511,8 +559,8 @@ async function add(t){
         unit_cost:item.unitCost,
         total_cost:item.totalCost,
         supplier:item.supplier,
-        qty_used:item.qtyUsed,
-        stock:item.stock,
+        qty_used:0,
+        stock:item.qtyReceived,
         reorder:item.reorder,
         notes:item.notes,
         created_by:currentUser.id
@@ -658,16 +706,20 @@ async function loadCloudWorkspace(){
   }));
 
   const legacyMaterials=Array.isArray(data.materials)?structuredClone(data.materials):[];
-  const mat=await sb.from('material_records').select('id,project_id,transaction_date,name,unit,qty_received,unit_cost,total_cost,supplier,qty_used,stock,reorder,notes').eq('company_id',currentCompany.company_id).order('created_at',{ascending:true});
+  const mat=await sb.from('material_records').select('id,project_id,transaction_date,name,unit,qty_received,unit_cost,total_cost,supplier,qty_used,stock,reorder,notes').eq('company_id',currentCompany.company_id).order('transaction_date',{ascending:true}).order('created_at',{ascending:true});
   if(mat.error){cloudLoadError='Materials database load failed: '+mat.error.message;return false;}
   if(!(mat.data||[]).length && legacyMaterials.length){
-    const rows=legacyMaterials.map(x=>({company_id:currentCompany.company_id,project_id:x.project_id||null,transaction_date:x.date||new Date().toISOString().slice(0,10),name:x.name,unit:x.unit,qty_received:Number(x.qtyReceived??x.stock??0),unit_cost:Number(x.unitCost||x.unit_cost||0),total_cost:Number(x.totalCost||x.stock||0),supplier:x.supplier||'',qty_used:Number(x.qtyUsed||0),stock:Number(x.stock||0),reorder:Number(x.reorder||0),notes:x.notes||'',created_by:currentUser.id}));
+    const rows=legacyMaterials.map(x=>({company_id:currentCompany.company_id,project_id:x.project_id||null,transaction_date:x.date||new Date().toISOString().slice(0,10),name:x.name,unit:x.unit,qty_received:Number(x.qtyReceived??x.stock??0),unit_cost:Number(x.unitCost||x.unit_cost||0),total_cost:Number(x.totalCost||x.stock||0),supplier:x.supplier||'',qty_used:0,stock:Number(x.qtyReceived??x.stock??0),reorder:Number(x.reorder||0),notes:x.notes||'',created_by:currentUser.id}));
     const migrated=await sb.from('material_records').insert(rows).select('id,project_id,transaction_date,name,unit,qty_received,unit_cost,total_cost,supplier,qty_used,stock,reorder,notes');
     if(migrated.error){cloudLoadError='Materials migration failed: '+migrated.error.message;return false;}
     mat.data=migrated.data||[];
   }
   const materialProjectNames=new Map(data.projects.map(x=>[x.db_id,x.name]));
-  data.materials=(mat.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'General / Company Stock',date:x.transaction_date||'',name:x.name||'',unit:x.unit||'',qtyReceived:Number(x.qty_received||0),unitCost:Number(x.unit_cost||0),totalCost:Number(x.total_cost||0),supplier:x.supplier||'',qtyUsed:Number(x.qty_used||0),stock:Number(x.stock||0),reorder:Number(x.reorder||0),notes:x.notes||''}));
+  data.materials=(mat.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'General / Company Stock',date:x.transaction_date||'',name:x.name||'',unit:x.unit||'',qtyReceived:Number(x.qty_received||0),unitCost:Number(x.unit_cost||0),totalCost:Number(x.total_cost||0),supplier:x.supplier||'',qtyUsed:0,stock:Number(x.qty_received||x.stock||0),reorder:Number(x.reorder||0),notes:x.notes||''}));
+
+  const u=await sb.from('material_usage_records').select('id,project_id,usage_date,material,unit,quantity,used_for,notes').eq('company_id',currentCompany.company_id).order('usage_date',{ascending:true}).order('created_at',{ascending:true});
+  if(u.error){cloudLoadError='Material usage database load failed: '+u.error.message;return false;}
+  data.materialUsage=(u.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'General / Company Stock',date:x.usage_date||'',name:x.material||'',unit:x.unit||'',quantity:Number(x.quantity||0),usedFor:x.used_for||'',notes:x.notes||''}));
 
   const b=await sb.from('boq_items')
     .select('id,project_id,code,description,unit,quantity,rate,budget,actual,progress,work_value')
@@ -694,55 +746,6 @@ async function loadCloudWorkspace(){
     actual:Number(x.actual||0),
     progress:Number(x.progress||0),
     work_value:Number(x.work_value||0)
-  }));
-
-  const m=await sb.from('material_records')
-    .select('id,project_id,name,unit,stock,reorder,unit_cost')
-    .eq('company_id',currentCompany.company_id)
-    .order('created_at',{ascending:true});
-
-  if(m.error){
-    cloudLoadError='Materials database load failed: '+m.error.message;
-    return false;
-  }
-
-  if(!(m.data||[]).length && Array.isArray(data.materials) && data.materials.length){
-    const legacyRows=data.materials.map(x=>({
-      company_id:currentCompany.company_id,
-      project_id:x.project_id||null,
-      name:x.name||'',
-      unit:x.unit||'',
-      stock:Number(x.stock||0),
-      reorder:Number(x.reorder||0),
-      unit_cost:Number(x.unitCost||x.unit_cost||0),
-      created_by:currentUser.id
-    }));
-    const mig=await sb.from('material_records').insert(legacyRows);
-    if(mig.error){
-      cloudLoadError='Materials migration failed: '+mig.error.message;
-      return false;
-    }
-    const refreshed=await sb.from('material_records')
-      .select('id,project_id,name,unit,stock,reorder,unit_cost')
-      .eq('company_id',currentCompany.company_id)
-      .order('created_at',{ascending:true});
-    if(refreshed.error){
-      cloudLoadError='Materials database reload failed: '+refreshed.error.message;
-      return false;
-    }
-    m.data=refreshed.data||[];
-  }
-
-  data.materials=(m.data||[]).map(x=>({
-    id:x.id,
-    db_id:x.id,
-    project_id:x.project_id,
-    project:projectNames.get(x.project_id)||'General / Company Stock',
-    name:x.name||'',
-    unit:x.unit||'',
-    stock:Number(x.stock||0),
-    reorder:Number(x.reorder||0),
-    unitCost:Number(x.unit_cost||0)
   }));
 
   localStorage.setItem('streetwiseDataV2',JSON.stringify(data));

@@ -74,12 +74,13 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 <script>
 const modules=[['dashboard','📊','Dashboard'],['projects','🏗️','Projects'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
 const emptyWorkspace={projects:[],materials:[],labour:[],boq:[],procurement:[],variations:[],expenses:[],snags:[],reports:[]};
-let data=structuredClone(emptyWorkspace);let currentProjectId=null;let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false, cloudLoadError='';
+let data=structuredClone(emptyWorkspace);let currentProjectId=null;let currentModuleId='dashboard';let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false, cloudLoadError='';
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
 let save=()=>localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
 function toast(t){let e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
 function nav(){let side=document.getElementById('nav'),mobile=document.getElementById('mobilebar');side.innerHTML=modules.map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span class="ico">${x[1]}</span>${x[2]}</button>`).join('');mobile.innerHTML=modules.slice(0,5).map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span>${x[1]}</span>${x[2].split(' ')[0]}</button>`).join('')}
 function show(id){
+  currentModuleId=id;
   document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));
   document.getElementById('mod-'+id)?.classList.add('active');
   document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('active',x.dataset.m===id));
@@ -257,6 +258,8 @@ function editRecord(t,id){
   if(t==='expense'){set('f1',x.project);set('f2',x.category);set('f3',x.description);set('f4',x.amount);}
 }
 async function updateRecord(t,id){
+  const returnModule=currentModuleId||'dashboard';
+  const returnProjectId=currentProjectId;
   const x=recordById(t,id); if(!x){toast('Record not found');return;}
   const setProjectFields=(obj)=>{const pn=v('f1');const p=data.projects.find(q=>q.name===pn);obj.project=pn||'General / Company Stock';obj.project_id=p?.db_id||p?.id||null};
   if(t==='project'){x.name=v('f1');x.client=v('f2');x.location=v('f3');x.budget=+v('f4');x.status=v('f5');
@@ -276,9 +279,14 @@ async function updateRecord(t,id){
   if(t==='report'){x.project=v('f1');x.type=v('f2');x.author=v('f3');}
   if(t==='snag'){x.project=v('f1');x.item=v('f2');x.priority=v('f3');}
   if(t==='expense'){x.project=v('f1');x.category=v('f2');x.description=v('f3');x.amount=+v('f4');}
-  save(); closeModal(); render(); toast('Changes saved');
+  save(); closeModal(); render();
+  if(returnProjectId) currentProjectId=returnProjectId;
+  show(returnModule);
+  toast('Changes saved');
 }
 async function deleteRecord(t,id){
+  const returnModule=currentModuleId||'dashboard';
+  const returnProjectId=currentProjectId;
   const x=recordById(t,id); if(!x){toast('Record not found');return;}
   const label=t==='project'?x.name:(x.description||x.name||x.item||x.trade||x.ref||x.id||'this record');
   if(!confirm(`Delete ${label}? This cannot be undone.`))return;
@@ -287,7 +295,11 @@ async function deleteRecord(t,id){
   const arrKey=t==='project'?'projects':t==='boq'?'boq':t==='material'?'materials':t==='labour'?'labour':t==='procurement'?'procurement':t==='progress'?'projects':t==='variation'?'variations':t==='report'?'reports':t==='snag'?'snags':'expenses';
   data[arrKey]=data[arrKey].filter(y=>String(y.db_id||y.id)!==String(id));
   if(t==='project'&&String(currentProjectId)===String(id))currentProjectId=null;
-  save(); render(); toast('Deleted successfully');
+  save(); render();
+  if(t!=='project' && returnProjectId) currentProjectId=returnProjectId;
+  const destination=(t==='project' && !currentProjectId)?'projects':returnModule;
+  show(destination);
+  toast('Deleted successfully');
 }
 function closeModal(){document.getElementById('modal').classList.remove('open')}const v=i=>document.getElementById(i).value;
 async function add(t){

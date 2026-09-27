@@ -119,49 +119,48 @@ function openProject(id){
 }
 
 function shell(id,body){return `<section class="module ${id==='dashboard'?'active':''}" id="mod-${id}">${body}</section>`}
+function selectedProject(){return selectedProjectId?data.projects.find(p=>p.db_id===selectedProjectId||p.id===selectedProjectId):null}
+function projectRows(arr){const p=selectedProject();return p?arr.filter(x=>x.project_id===p.db_id||x.project===p.name):arr}
+function enterProject(id){selectedProjectId=id;show('dashboard');render();toast('Project workspace opened')}
+function clearProject(){selectedProjectId=null;show('projects');render();toast('Showing all projects')}
+function projectSelector(){return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:11px;font-weight:800;color:var(--muted)">PROJECT <select onchange="selectProject(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff"><option value="">All Projects</option>${data.projects.map(p=>`<option value="${p.db_id}" ${selectedProjectId===p.db_id?'selected':''}>${p.name}</option>`).join('')}</select></label>${selectedProjectId?`<button class="btn" onclick="clearProject()">← All Projects</button>`:''}</div>`}
+function selectProject(id){selectedProjectId=id||null;render();show(selectedProjectId?'dashboard':'projects')}
 function dashboard(){
-  const cp=currentProject();
-  const projects=cp?[cp]:data.projects;
-  const boq=projectRows(data.boq);
-  const variations=projectRows(data.variations);
-  const reports=projectRows(data.reports);
-  const snags=projectRows(data.snags);
-  const expenses=projectRows(data.expenses);
-  const procurement=projectRows(data.procurement);
-  let budget=projects.reduce((a,p)=>a+(+p.budget||0),0);
-  let spent=projects.reduce((a,p)=>a+(+p.spent||0),0);
-  let alerts=data.materials.filter(m=>m.stock<=m.reorder).length;
-  let open=snags.filter(s=>s.status!=='Closed').length;
-  const title=cp?`${cp.name} · Project Dashboard`:'Company Dashboard';
-  const activityHtml=cp
-    ? (reports.slice(0,4).map(x=>`<div class="row"><div><strong>${x.type}</strong><div class="muted">${x.date} · ${x.author}</div></div><span class="pill green">${x.status}</span></div>`).join('')||'<div class="empty">No site reports yet.</div>')
-    : (procurement.slice(0,4).map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.supplier} · ${x.qty}</div></div><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></div>`).join('')||'<div class="empty">No procurement records.</div>');
-  const activityTitle=cp?'Project Activity':'Procurement Watch';
-  const activityModule=cp?'reports':'procurement';
-  return shell('dashboard',`
-<div class="card" style="margin-bottom:13px;background:linear-gradient(135deg,#102a43,#1f5f8b);color:#fff">
-  <div class="section-head" style="margin-bottom:4px"><div><div style="font-size:11px;opacity:.75;text-transform:uppercase;letter-spacing:.08em">${cp?'Current Project':'Company Portfolio'}</div><h2 style="font-size:20px;margin:4px 0;color:#fff">${title}</h2></div>${cp?`<button class="btn gold" onclick="setProject('')">← All Projects</button>`:''}</div>
-  <div style="font-size:12px;opacity:.82">${cp?(cp.location||'Project workspace'):'Select a project above or click a project below to enter its workspace.'}</div>
-</div>
+if(selectedProjectId){
+ const p=selectedProject();
+ if(!p){selectedProjectId=null;return dashboard()}
+ const boq=projectRows(data.boq), vars=projectRows(data.variations), reps=projectRows(data.reports), snags=projectRows(data.snags), exps=projectRows(data.expenses);
+ const budget=boq.reduce((a,x)=>a+(+x.budget||0),0), actual=boq.reduce((a,x)=>a+(+x.actual||0),0), open=snags.filter(s=>s.status!=='Closed').length, spent=p.spent||actual;
+ return shell('dashboard',`${projectSelector()}
+ <div class="card" style="margin-bottom:13px"><div class="section-head"><div><div class="eyebrow">Project Workspace</div><h2 style="margin:4px 0;font-size:20px">${p.name}</h2><div class="muted">${p.client||''} · ${p.location||''}</div></div><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></div></div>
+ <div class="grid">
+ <div class="card metric"><small>Contract Value</small><div class="num">${money(p.budget)}</div><div class="note">${p.client||'Project'}</div></div>
+ <div class="card metric"><small>BOQ Budget</small><div class="num">${money(budget)}</div><div class="note">${boq.length} BOQ items</div></div>
+ <div class="card metric"><small>Actual / Spent</small><div class="num">${money(spent)}</div><div class="note">${p.budget?Math.round(spent/p.budget*100):0}% of contract</div></div>
+ <div class="card metric"><small>Open Snags</small><div class="num">${open}</div><div class="note ${open?'warn':'up'}">${open?'Items require action':'No open snags'}</div></div>
+ </div>
+ <div class="section two">
+ <div class="card"><div class="section-head"><h2>Project Progress</h2><button class="btn" onclick="show('progress')">Update</button></div><div style="font-size:30px;font-weight:850">${p.progress||0}%</div><div class="bar" style="margin-top:10px"><i style="width:${p.progress||0}%"></i></div><div class="muted" style="margin-top:8px">BOQ actual: ${money(actual)}</div></div>
+ <div class="card"><div class="section-head"><h2>Project Controls</h2></div><div class="row"><span>BOQ Items</span><strong>${boq.length}</strong></div><div class="row"><span>Variations</span><strong>${vars.length}</strong></div><div class="row"><span>Site Reports</span><strong>${reps.length}</strong></div><div class="row"><span>Expenses</span><strong>${exps.length}</strong></div></div>
+ </div>
+ <div class="section two"><div class="card"><div class="section-head"><h2>Open Snags</h2><button class="btn" onclick="show('snags')">Open</button></div>${snags.filter(s=>s.status!=='Closed').slice(0,5).map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.id}</div></div><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></div>`).join('')||'<div class="empty">No open snags.</div>'}</div>
+ <div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${exps.slice(0,5).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.date} · ${x.category}</div></div><strong>${money(x.amount)}</strong></div>`).join('')||'<div class="empty">No expenses.</div>'}</div></div>`)
+}
+let budget=data.projects.reduce((a,p)=>a+p.budget,0),spent=data.projects.reduce((a,p)=>a+p.spent,0),alerts=data.materials.filter(m=>m.stock<=m.reorder).length,open=data.snags.filter(s=>s.status!=='Closed').length;return shell('dashboard',`${projectSelector()}
 <div class="grid">
-<div class="card metric"><small>${cp?'Contract Value':'Active Projects'}</small><div class="num">${cp?money(cp.budget):data.projects.filter(p=>p.status==='Active').length}</div><div class="note ${cp?'':'up'}">${cp?`${cp.progress||0}% current progress`:`${data.projects.length} total projects`}</div></div>
-<div class="card metric"><small>${cp?'Project Spend':'Portfolio Budget'}</small><div class="num">${cp?money(cp.spent):money(budget)}</div><div class="note">${cp?`${cp.budget?Math.round((cp.spent||0)/cp.budget*100):0}% of contract`:budget?`${Math.round(spent/budget*100)}% committed/spent`:'No budget yet'}</div></div>
+<div class="card metric"><small>Active Projects</small><div class="num">${data.projects.filter(p=>p.status==='Active').length}</div><div class="note up">● ${data.projects.length} total projects</div></div>
+<div class="card metric"><small>Portfolio Budget</small><div class="num">${money(budget)}</div><div class="note">${budget?Math.round(spent/budget*100):0}% committed/spent</div></div>
 <div class="card metric"><small>Stock Alerts</small><div class="num">${alerts}</div><div class="note ${alerts?'warn':'up'}">${alerts?'Reorder required':'Stock within levels'}</div></div>
 <div class="card metric"><small>Open Snags</small><div class="num">${open}</div><div class="note ${open?'warn':'up'}">${open?'Items require action':'No open snags'}</div></div>
 </div>
 <div class="section two">
-<div class="card"><div class="section-head"><h2>${cp?'Project BOQ':'Project Control'}</h2><button class="btn" onclick="show('boq')">${cp?'Open BOQ':'View all'}</button></div>
-${cp?`<div class="row"><div><strong>${boq.length}</strong><div class="muted">BOQ items</div></div><strong>${money(boq.reduce((a,x)=>a+(+x.budget||0),0))}</strong></div>
-<div class="row"><div><strong>Actual cost</strong><div class="muted">Across project BOQ</div></div><strong>${money(boq.reduce((a,x)=>a+(+x.actual||0),0))}</strong></div>
-<div class="row"><div><strong>Project progress</strong><div class="muted">Current reported progress</div></div><strong>${cp.progress||0}%</strong></div>`
-:`<table><thead><tr><th>Project</th><th>Progress</th><th>Budget</th><th>Status</th></tr></thead><tbody>${projects.map(p=>`<tr onclick="openProject('${p.db_id||p.id}')" style="cursor:pointer"><td><strong>${p.name}</strong><br><span class="muted">${p.location}</span></td><td><div class="bar"><i style="width:${p.progress||0}%"></i></div><small>${p.progress||0}%</small></td><td>${money(p.budget)}</td><td><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></td></tr>`).join('')}</tbody></table>`}</div>
-<div class="card"><div class="section-head"><h2>${cp?'Project Cost Position':'Cost Position'}</h2><span class="muted">Actual spend</span></div>${projects.map(p=>`<div class="row"><div><strong>${p.name}</strong><div class="muted">${p.budget?Math.round((p.spent||0)/p.budget*100):0}% of budget</div></div><strong>${money(p.spent)}</strong></div>`).join('')}</div>
+<div class="card"><div class="section-head"><h2>Project Control</h2><button class="btn" onclick="show('projects')">View all</button></div>
+<table><thead><tr><th>Project</th><th>Progress</th><th>Budget</th><th>Status</th></tr></thead><tbody>${data.projects.map(p=>`<tr onclick="enterProject('${p.db_id}')" style="cursor:pointer"><td><strong>${p.name}</strong><br><span class="muted">${p.location}</span></td><td><div class="bar"><i style="width:${p.progress}%"></i></div><small>${p.progress}%</small></td><td>${money(p.budget)}</td><td><span class="pill ${p.status==='Active'?'green':'orange'}">${p.status}</span></td></tr>`).join('')}</tbody></table></div>
+<div class="card"><div class="section-head"><h2>Cost Position</h2><span class="muted">Actual spend</span></div>${data.projects.map(p=>`<div class="row"><div><strong>${p.name}</strong><div class="muted">${p.budget?Math.round(p.spent/p.budget*100):0}% of budget</div></div><strong>${money(p.spent)}</strong></div>`).join('')}</div>
 </div>
-<div class="section two">
-<div class="card"><div class="section-head"><h2>${activityTitle}</h2><button class="btn" onclick="show('${activityModule}')">Open</button></div>${activityHtml}</div>
-<div class="card"><div class="section-head"><h2>${cp?'Project Expenses':'Recent Expenses'}</h2><button class="btn" onclick="show('expenses')">Open</button></div>${expenses.slice(0,4).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.project} · ${x.date}</div></div><strong>${money(x.amount)}</strong></div>`).join('')||'<div class="empty">No expenses recorded.</div>'}</div>
-</div>`)}
-
+<div class="section two"><div class="card"><div class="section-head"><h2>Procurement Watch</h2><button class="btn" onclick="show('procurement')">Open</button></div>${data.procurement.map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.supplier} · ${x.qty}</div></div><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></div>`).join('')}</div>
+<div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${data.expenses.slice(0,4).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.project} · ${x.date}</div></div><strong>${money(x.amount)}</strong></div>`).join('')}</div></div>`)
+}
 function table(id,title,headers,rows,action){return shell(id,`<div class="card"><div class="section-head"><h2>${title}</h2><div class="module-tools">${action||''}</div></div><div style="overflow:auto"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${headers.length}" class="empty">No records.</td></tr>`}</tbody></table></div></div>`)}
 function render(){
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
@@ -350,7 +349,7 @@ async function add(t){
   save();
   closeModal();
   render();
-  show('dashboard');
+  show(selectedProjectId?'dashboard':'dashboard');
   toast('Saved successfully');
 }
 function exportData(){let b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='streetwise-data.json';a.click();toast('Data exported')}

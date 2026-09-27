@@ -119,16 +119,16 @@ function openProject(id){
 }
 
 function shell(id,body){return `<section class="module ${id==='dashboard'?'active':''}" id="mod-${id}">${body}</section>`}
-function selectedProject(){return selectedProjectId?data.projects.find(p=>p.db_id===selectedProjectId||p.id===selectedProjectId):null}
+function selectedProject(){return currentProjectId?data.projects.find(p=>p.db_id===currentProjectId||p.id===currentProjectId):null}
 function projectRows(arr){const p=selectedProject();return p?arr.filter(x=>x.project_id===p.db_id||x.project===p.name):arr}
-function enterProject(id){selectedProjectId=id;show('dashboard');render();toast('Project workspace opened')}
-function clearProject(){selectedProjectId=null;show('projects');render();toast('Showing all projects')}
-function projectSelector(){return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:11px;font-weight:800;color:var(--muted)">PROJECT <select onchange="selectProject(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff"><option value="">All Projects</option>${data.projects.map(p=>`<option value="${p.db_id}" ${selectedProjectId===p.db_id?'selected':''}>${p.name}</option>`).join('')}</select></label>${selectedProjectId?`<button class="btn" onclick="clearProject()">← All Projects</button>`:''}</div>`}
-function selectProject(id){selectedProjectId=id||null;render();show(selectedProjectId?'dashboard':'projects')}
+function enterProject(id){currentProjectId=id;show('dashboard');render();toast('Project workspace opened')}
+function clearProject(){currentProjectId=null;show('projects');render();toast('Showing all projects')}
+function projectSelector(){return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:11px;font-weight:800;color:var(--muted)">PROJECT <select onchange="selectProject(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff"><option value="">All Projects</option>${data.projects.map(p=>`<option value="${p.db_id}" ${currentProjectId===p.db_id?'selected':''}>${p.name}</option>`).join('')}</select></label>${currentProjectId?`<button class="btn" onclick="clearProject()">← All Projects</button>`:''}</div>`}
+function selectProject(id){currentProjectId=id||null;render();show(currentProjectId?'dashboard':'projects')}
 function dashboard(){
-if(selectedProjectId){
+if(currentProjectId){
  const p=selectedProject();
- if(!p){selectedProjectId=null;return dashboard()}
+ if(!p){currentProjectId=null;return dashboard()}
  const boq=projectRows(data.boq), vars=projectRows(data.variations), reps=projectRows(data.reports), snags=projectRows(data.snags), exps=projectRows(data.expenses);
  const budget=boq.reduce((a,x)=>a+(+x.budget||0),0), actual=boq.reduce((a,x)=>a+(+x.actual||0),0), open=snags.filter(s=>s.status!=='Closed').length, spent=p.spent||actual;
  return shell('dashboard',`${projectSelector()}
@@ -349,7 +349,7 @@ async function add(t){
   save();
   closeModal();
   render();
-  show(selectedProjectId?'dashboard':'dashboard');
+  show(currentProjectId?'dashboard':'dashboard');
   toast('Saved successfully');
 }
 function exportData(){let b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='streetwise-data.json';a.click();toast('Data exported')}

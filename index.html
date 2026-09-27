@@ -102,10 +102,12 @@ function show(id){
 } 
 function currentProject(){return data.projects.find(p=>String(p.db_id||p.id)===String(currentProjectId))||null}
 function setProject(id){
+  const returnModule=currentModuleId||'projects';
   currentProjectId=id||null;
+  if(returnModule==='materials') currentMaterialCategory='All';
   saveNavigation();
   render();
-  show(currentProjectId?'dashboard':'projects');
+  show(currentProjectId?returnModule:'projects');
   toast(currentProjectId?`Project selected: ${currentProject()?.name||''}`:'Showing all projects');
 }
 function updateProjectContext(){
@@ -134,7 +136,16 @@ function selectedProject(){return currentProject()}
 function enterProject(id){currentProjectId=id;saveNavigation();show('dashboard');render();toast('Project workspace opened')}
 function clearProject(){currentProjectId=null;saveNavigation();show('projects');render();toast('Showing all projects')}
 function projectSelector(){return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:11px;font-weight:800;color:var(--muted)">PROJECT <select onchange="selectProject(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff"><option value="">All Projects</option>${data.projects.map(p=>`<option value="${p.db_id}" ${currentProjectId===p.db_id?'selected':''}>${p.name}</option>`).join('')}</select></label>${currentProjectId?`<button class="btn" onclick="clearProject()">← All Projects</button>`:''}</div>`}
-function selectProject(id){currentProjectId=id||null;saveNavigation();render();show(currentProjectId?'dashboard':'projects')}
+function selectProject(id){
+  const returnModule=currentModuleId||'projects';
+  currentProjectId=id||null;
+  // Material categories belong to the selected project, so reset only the category filter.
+  if(returnModule==='materials') currentMaterialCategory='All';
+  saveNavigation();
+  render();
+  show(currentProjectId?returnModule:'projects');
+  toast(currentProjectId?`Project selected: ${currentProject()?.name||''}`:'Showing all projects');
+}
 function projectsHome(){
   const cards=data.projects.map(p=>{
     const s=projectBoqStats(p.db_id||p.id);

@@ -80,10 +80,15 @@ const emptyWorkspace={projects:[],materialCategories:[],materials:[],materialUsa
 let data=structuredClone(emptyWorkspace);let currentProjectId=null;let currentModuleId='dashboard';let currentMaterialCategory='All';let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false, cloudLoadError='';
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
 let save=()=>localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
+function saveNavigation(){try{localStorage.setItem('streetwiseNavigation',JSON.stringify({projectId:currentProjectId,moduleId:currentModuleId,materialCategory:currentMaterialCategory}));}catch(e){}}
+function restoreNavigation(){try{const n=JSON.parse(localStorage.getItem('streetwiseNavigation')||'null');if(n){currentProjectId=n.projectId||null;currentModuleId=n.moduleId||'projects';currentMaterialCategory=n.materialCategory||'All';}}catch(e){}}
+window.addEventListener('pagehide',saveNavigation);
+window.addEventListener('beforeunload',saveNavigation);
 function toast(t){let e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
 function nav(){let side=document.getElementById('nav'),mobile=document.getElementById('mobilebar');side.innerHTML=modules.map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span class="ico">${x[1]}</span>${x[2]}</button>`).join('');mobile.innerHTML=modules.slice(0,5).map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span>${x[1]}</span>${x[2].split(' ')[0]}</button>`).join('')}
 function show(id){
   currentModuleId=id;
+  saveNavigation();
   document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));
   document.getElementById('mod-'+id)?.classList.add('active');
   document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('active',x.dataset.m===id));
@@ -98,8 +103,9 @@ function show(id){
 function currentProject(){return data.projects.find(p=>String(p.db_id||p.id)===String(currentProjectId))||null}
 function setProject(id){
   currentProjectId=id||null;
+  saveNavigation();
   render();
-  show(currentProjectId?'dashboard':'dashboard');
+  show(currentProjectId?'dashboard':'projects');
   toast(currentProjectId?`Project selected: ${currentProject()?.name||''}`:'Showing all projects');
 }
 function updateProjectContext(){
@@ -117,6 +123,7 @@ function projectMatches(x){
 function projectRows(list){return currentProject()?list.filter(projectMatches):list}
 function openProject(id){
   currentProjectId=id;
+  saveNavigation();
   render();
   show('dashboard');
   window.scrollTo({top:0,behavior:'smooth'});
@@ -124,10 +131,10 @@ function openProject(id){
 
 function shell(id,body){return `<section class="module ${id==='dashboard'?'active':''}" id="mod-${id}">${body}</section>`}
 function selectedProject(){return currentProject()}
-function enterProject(id){currentProjectId=id;show('dashboard');render();toast('Project workspace opened')}
-function clearProject(){currentProjectId=null;show('projects');render();toast('Showing all projects')}
+function enterProject(id){currentProjectId=id;saveNavigation();show('dashboard');render();toast('Project workspace opened')}
+function clearProject(){currentProjectId=null;saveNavigation();show('projects');render();toast('Showing all projects')}
 function projectSelector(){return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:11px;font-weight:800;color:var(--muted)">PROJECT <select onchange="selectProject(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff"><option value="">All Projects</option>${data.projects.map(p=>`<option value="${p.db_id}" ${currentProjectId===p.db_id?'selected':''}>${p.name}</option>`).join('')}</select></label>${currentProjectId?`<button class="btn" onclick="clearProject()">← All Projects</button>`:''}</div>`}
-function selectProject(id){currentProjectId=id||null;render();show(currentProjectId?'dashboard':'projects')}
+function selectProject(id){currentProjectId=id||null;saveNavigation();render();show(currentProjectId?'dashboard':'projects')}
 function projectsHome(){
   const cards=data.projects.map(p=>{
     const s=projectBoqStats(p.db_id||p.id);
@@ -662,8 +669,11 @@ async function add(t){
 
   save();
   closeModal();
+  const returnModule=currentModuleId;
+  const returnProject=currentProjectId;
   render();
-  show(currentProjectId?'dashboard':'dashboard');
+  currentProjectId=returnProject;
+  show(returnModule);
   toast('Saved successfully');
 }
 function exportData(){let b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='streetwise-data.json';a.click();toast('Data exported')}
@@ -671,7 +681,7 @@ let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.prev
 async function installApp(){if(!deferredPrompt){toast('Use your browser menu to install this app');return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBtn').classList.remove('show')}
 window.addEventListener('appinstalled',()=>toast('Streetwise installed'));
 async function boot(){
-  nav(); render(); show('projects');
+  nav(); restoreNavigation(); render(); show(currentModuleId||'projects');
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=5');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
@@ -685,8 +695,8 @@ function setAuthStatus(t){const e=document.getElementById('authStatus'); if(e)e.
 function showAuth(v){document.getElementById('authScreen').style.display=v?'flex':'none'; if(v) document.getElementById('companyScreen').style.display='none'}
 function toggleAuthMode(){authMode=authMode==='signin'?'signup':'signin';document.getElementById('authTitle').textContent=authMode==='signin'?'Sign in':'Create your account';document.getElementById('authSub').textContent=authMode==='signin'?'Access your construction projects from phone or PC.':'Create the first user account for your Streetwise company.';document.getElementById('nameWrap').style.display=authMode==='signup'?'grid':'none';document.getElementById('authSubmit').textContent=authMode==='signin'?'Sign in':'Create account';document.getElementById('authToggle').textContent=authMode==='signin'?'Create an account':'Back to sign in';setAuthStatus('')}
 async function submitAuth(){if(!sb){setAuthStatus('Supabase is not configured.');return}const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value,name=document.getElementById('authName').value.trim();if(!email||!password){setAuthStatus('Enter email and password.');return}setAuthStatus('Working…');let r;if(authMode==='signup')r=await sb.auth.signUp({email,password,options:{data:{full_name:name}}});else r=await sb.auth.signInWithPassword({email,password});if(r.error){setAuthStatus(r.error.message);return}if(authMode==='signup'&&!r.data.session){setAuthStatus('Account created. Check your email to confirm, then sign in.');return}if(r.data.user)await onSignedIn(r.data.user)}
-async function onSignedIn(user){currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);const r=await sb.rpc('my_companies');if(r.error){showAuth(true);setAuthStatus(r.error.message);return}if(!r.data?.length){document.getElementById('companyScreen').style.display='flex';return}currentCompany=r.data[0];const ok=await loadCloudWorkspace();if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Cloud workspace connected')}
-async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
+async function onSignedIn(user){currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);const r=await sb.rpc('my_companies');if(r.error){showAuth(true);setAuthStatus(r.error.message);return}if(!r.data?.length){document.getElementById('companyScreen').style.display='flex';return}currentCompany=r.data[0];const ok=await loadCloudWorkspace();if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Cloud workspace connected')}
+async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
 async function loadCloudWorkspace(){
   cloudLoadError='';
 

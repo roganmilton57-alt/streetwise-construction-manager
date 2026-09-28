@@ -1,4 +1,4 @@
-const CACHE = 'streetwise-commercial-v10';
+const CACHE = 'streetwise-commercial-v12';
 
 const ASSETS = [
   './',
@@ -9,6 +9,7 @@ const ASSETS = [
   './icon-512.png'
 ];
 
+// Install
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
@@ -17,6 +18,7 @@ self.addEventListener('install', event => {
   );
 });
 
+// Activate
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
@@ -31,30 +33,34 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Fetch
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-
-      return fetch(event.request).then(response => {
-        if (
-          !response ||
-          response.status !== 200 ||
-          response.type === 'opaque'
-        ) {
-          return response;
+    caches.match(event.request)
+      .then(cached => {
+        if (cached) {
+          return cached;
         }
 
-        const copy = response.clone();
+        return fetch(event.request).then(response => {
+          if (
+            !response ||
+            response.status !== 200 ||
+            response.type === 'opaque'
+          ) {
+            return response;
+          }
 
-        caches.open(CACHE).then(cache => {
-          cache.put(event.request, copy);
+          const copy = response.clone();
+
+          caches.open(CACHE).then(cache => {
+            cache.put(event.request, copy);
+          });
+
+          return response;
         });
-
-        return response;
-      });
-    })
+      })
   );
 });

@@ -37,6 +37,15 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 </style>
 </head>
 <body>
+<div id="startupGuard" style="position:fixed;inset:0;z-index:1000;background:#f3f6f8;display:none;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif">
+  <div style="max-width:560px;background:#fff;border:1px solid #dfe6eb;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.12)">
+    <h2 style="margin:0 0 8px">Streetwise could not start</h2>
+    <p style="color:#6b7b88;font-size:13px">The application loaded, but a startup error stopped the interface.</p>
+    <pre id="startupError" style="white-space:pre-wrap;background:#f6f8fa;padding:12px;border-radius:8px;font-size:12px;overflow:auto"></pre>
+    <button onclick="location.reload()" style="margin-top:10px;padding:9px 12px">Reload</button>
+  </div>
+</div>
+<script>window.addEventListener('error',function(e){var g=document.getElementById('startupGuard'),m=document.getElementById('startupError');if(g){g.style.display='flex';if(m)m.textContent=(e.message||'Unknown JavaScript error')+'\n'+(e.filename||'')+':'+(e.lineno||'');}});window.addEventListener('unhandledrejection',function(e){var g=document.getElementById('startupGuard'),m=document.getElementById('startupError');if(g){g.style.display='flex';if(m)m.textContent='Unhandled promise rejection: '+(e.reason?.message||e.reason||'Unknown error');}});</script>
 <div class="app">
 <aside class="sidebar">
  <div class="brand"><div class="logo">SW</div><div><b>STREETWISE</b><small>Construction Manager</small></div></div>
@@ -422,17 +431,13 @@ if(t==='expense')h=`<div class="form"><label>Project<select id="f1">${opts()}</s
 if(t==='excelImport')h=excelImportForm(importType||'boq');
 document.getElementById('modalBody').innerHTML=h;document.getElementById('modal').classList.add('open')}
 
-let excelImportState={type:null,rows:[],headers:[],mapping:{},fileName:''};
+let excelImportState={type:null,rows:[],headers:[],mapping:{},fileName:'',sheets:[],sheetIndex:0,headerRow:0};
+
 function excelImportForm(type){
   const title=type==='boq'?'Import BOQ from Excel':'Import Material Receipts from Excel';
   const cp=currentProject();
   const projects=data.projects.map(p=>`<option value="${inlineEsc(p.db_id||p.id)}" ${cp&&String(cp.db_id||cp.id)===String(p.db_id||p.id)?'selected':''}>${inlineEsc(p.name)}</option>`).join('');
-  return `<div class="form">
-    <div class="muted">${title}. Upload an <strong>.xlsx</strong> or <strong>.csv</strong> file. Streetwise will preview the rows and let you confirm the column mapping before anything is saved.</div>
-    <label>Project<select id="importProject">${projects||'<option value="">No projects available</option>'}</select></label>
-    <label>Excel file<input id="excelFile" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onchange="handleExcelFile(this.files[0],'${type}')"></label>
-    <div id="importWorkArea"><div class="import-status">Choose a file to begin.</div></div>
-  </div>`;
+  return `<div class="form"><div class="muted">${title}. Upload an <strong>.xlsx</strong> or <strong>.csv</strong> file. Streetwise automatically detects the worksheet, header row and likely BOQ columns, then lets you adjust the mapping before import.</div><label>Project<select id="importProject">${projects||'<option value="">No projects available</option>'}</select></label><label>Excel file<input id="excelFile" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onchange="handleExcelFile(this.files[0],'${type}')"></label><div id="importWorkArea"><div class="import-status">Choose a file to begin.</div></div></div>`;
 }
 function normHeader(v){return String(v??'').trim().toLowerCase().replace(/[\s_\-\/]+/g,' ').replace(/[^a-z0-9 %]/g,'').trim()}
 function csvRows(text){
@@ -440,25 +445,56 @@ function csvRows(text){
   for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);row=[];cell='';}else cell+=c;}
   if(cell!==''||row.length){row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);}return rows;
 }
-async function parseXlsxFile(file){
-  const ab=await file.arrayBuffer();
-  const zip=await JSZip.loadAsync(ab);
-  const shared=[];
+function cellValueFromXlsx(c,shared){
+  const t=c.getAttribute('t');
+  if(t==='inlineStr')return Array.from(c.querySelectorAll('is t')).map(x=>x.textContent).join('');
+  const v=c.querySelector('v');let val=v?v.textContent:'';
+  if(t==='s')val=shared[Number(val)]??'';else if(t==='b')val=val==='1';
+  return val;
+}
+async function parseXlsxWorkbook(file){
+  const ab=await file.arrayBuffer();const zip=await JSZip.loadAsync(ab);const shared=[];
   if(zip.file('xl/sharedStrings.xml')){const xml=await zip.file('xl/sharedStrings.xml').async('text');const doc=new DOMParser().parseFromString(xml,'application/xml');doc.querySelectorAll('si').forEach(si=>shared.push(Array.from(si.querySelectorAll('t')).map(t=>t.textContent).join('')));}
-  let sheetPath='xl/worksheets/sheet1.xml';
-  if(zip.file('xl/workbook.xml')){const wb=new DOMParser().parseFromString(await zip.file('xl/workbook.xml').async('text'),'application/xml');const first=wb.querySelector('sheet');const rid=first?.getAttribute('r:id');if(rid&&zip.file('xl/_rels/workbook.xml.rels')){const rels=new DOMParser().parseFromString(await zip.file('xl/_rels/workbook.xml.rels').async('text'),'application/xml');const rel=Array.from(rels.querySelectorAll('Relationship')).find(x=>x.getAttribute('Id')===rid);if(rel){let t=rel.getAttribute('Target')||'';if(!t.startsWith('/'))t='xl/'+t.replace(/^\.?\//,'');sheetPath=t;}}}
-  const sheet=zip.file(sheetPath)||zip.file('xl/worksheets/sheet1.xml');if(!sheet)throw new Error('No worksheet found in the Excel file.');
-  const doc=new DOMParser().parseFromString(await sheet.async('text'),'application/xml');
-  const rows=[];
-  doc.querySelectorAll('sheetData > row').forEach(r=>{const cells=[];r.querySelectorAll(':scope > c').forEach(c=>{const ref=c.getAttribute('r')||'';const col=(ref.match(/^[A-Z]+/)||['A'])[0];let idx=0;for(const ch of col)idx=idx*26+(ch.charCodeAt(0)-64);idx--;let val='';const t=c.getAttribute('t');if(t==='inlineStr')val=Array.from(c.querySelectorAll('is t')).map(x=>x.textContent).join('');else{const v=c.querySelector('v');val=v?v.textContent:'';if(t==='s')val=shared[Number(val)]??'';else if(t==='b')val=val==='1';}cells[idx]=val;});rows.push(cells);});
-  return rows;
+  const parseSheet=async(sheetPath)=>{const sheet=zip.file(sheetPath);if(!sheet)return [];const doc=new DOMParser().parseFromString(await sheet.async('text'),'application/xml');const rows=[];doc.querySelectorAll('sheetData > row').forEach(r=>{const cells=[];r.querySelectorAll(':scope > c').forEach(c=>{const ref=c.getAttribute('r')||'';const col=(ref.match(/^[A-Z]+/)||['A'])[0];let idx=0;for(const ch of col)idx=idx*26+(ch.charCodeAt(0)-64);idx--;cells[idx]=cellValueFromXlsx(c,shared);});rows.push(cells);});return rows;};
+  const sheets=[];
+  if(zip.file('xl/workbook.xml')){const wb=new DOMParser().parseFromString(await zip.file('xl/workbook.xml').async('text'),'application/xml');const rels=zip.file('xl/_rels/workbook.xml.rels')?new DOMParser().parseFromString(await zip.file('xl/_rels/workbook.xml.rels').async('text'),'application/xml'):null;for(const sh of Array.from(wb.querySelectorAll('sheets > sheet'))){const name=sh.getAttribute('name')||'';const rid=sh.getAttribute('r:id');let path='';if(rels&&rid){const rel=Array.from(rels.querySelectorAll('Relationship')).find(x=>x.getAttribute('Id')===rid);if(rel){let t=rel.getAttribute('Target')||'';path=t.startsWith('/')?t.slice(1):('xl/'+t.replace(/^\.?\//,''));}}if(path)sheets.push({name,path,rows:[]});}}
+  if(!sheets.length)sheets.push({name:'Sheet1',path:'xl/worksheets/sheet1.xml',rows:[]});
+  for(const sh of sheets)sh.rows=await parseSheet(sh.path);
+  return sheets;
 }
 async function handleExcelFile(file,type){
   if(!file)return;const area=document.getElementById('importWorkArea');area.innerHTML='<div class="import-status">Reading '+inlineEsc(file.name)+'…</div>';
-  try{let rows;if(file.name.toLowerCase().endsWith('.csv'))rows=csvRows(await file.text());else rows=await parseXlsxFile(file);if(!rows||rows.length<2)throw new Error('The file needs a header row and at least one data row.');excelImportState={type,rows,headers:rows[0].map(x=>String(x??'').trim()),mapping:autoMapHeaders(rows[0],type),fileName:file.name};renderImportMapping();}catch(e){area.innerHTML=`<div class="import-status import-error">Could not read the file: ${inlineEsc(e.message||e)}</div>`;}}
-function autoMapHeaders(headers,type){const h=headers.map(normHeader);const aliases=type==='boq'?{code:['item','code','item code','boq item','ref','reference'],description:['description','work item','item description'],unit:['unit','uom'],quantity:['quantity','qty','required quantity'],rate:['rate','unit rate','price','unit price'],progress:['% complete','complete','progress','progress %']}:{date:['date','delivery date','transaction date'],material:['material','name','material name','item'],unit:['unit','uom'],qtyReceived:['qty received','quantity received','qty','quantity','received'],unitCost:['unit cost','cost','rate','price'],supplier:['supplier','vendor'],category:['category','material category'],reorder:['reorder','reorder level','minimum stock'],notes:['notes','remarks','comment']};const out={};Object.entries(aliases).forEach(([key,names])=>{const idx=h.findIndex(x=>names.includes(x));out[key]=idx>=0?idx:''});return out;}
+  try{
+    let sheets;
+    if(file.name.toLowerCase().endsWith('.csv')) sheets=[{name:file.name,rows:csvRows(await file.text())}];
+    else sheets=await parseXlsxWorkbook(file);
+    if(!sheets?.length)throw new Error('No worksheets were found in the file.');
+    const scored=sheets.map((sh,i)=>({i,score:scoreSheet(sh,type),header:detectHeaderRow(sh.rows,type)})).sort((a,b)=>b.score-a.score);
+    const chosen=scored[0]?.i??0;const header=scored[0]?.header?.index??0;
+    excelImportState={type,rows:sheets[chosen].rows,headers:[],mapping:{},fileName:file.name,sheets,sheetIndex:chosen,headerRow:header};
+    setImportDataset(chosen,header);renderImportMapping();
+  }catch(e){area.innerHTML=`<div class="import-status import-error">Could not read the file: ${inlineEsc(e.message||e)}</div>`;}
+}
+const BOQ_ALIASES={code:['item','item no','item number','item no.','code','item code','boq item','ref','reference','ref no','ref no.','bill item'],description:['description','work item','item description','work description','particulars','details','scope of work','activity'],unit:['unit','uom','units','unit of measure'],quantity:['quantity','qty','qnty','required quantity','estimated quantity','amount of work'],rate:['rate','unit rate','price','unit price','unit cost','rate per unit'],amount:['amount','total','total amount','value','item amount','extended amount','line total'],progress:['% complete','complete','completion','progress','progress %','percent complete']};
+function headerMatch(h,aliases){return aliases.includes(h)||aliases.some(a=>h===a||h.includes(a)&&a.length>3)}
+function scoreHeaderRow(row,type='boq'){const vals=row.map(normHeader);if(type!=='boq')return 0;let score=0;for(const [k,aliases] of Object.entries(BOQ_ALIASES)){if(vals.some(v=>headerMatch(v,aliases)))score+=k==='description'?5:k==='quantity'||k==='rate'?4:k==='amount'?3:2;}if(vals.some(v=>v.includes('bill of quantities')||v==='boq'))score+=2;return score;}
+function detectHeaderRow(rows,type='boq'){let best={index:0,score:0};const limit=Math.min(rows.length,120);for(let i=0;i<limit;i++){const score=scoreHeaderRow(rows[i]||[],type);if(score>best.score)best={index:i,score};}return best;}
+function scoreSheet(sh,type='boq'){const h=detectHeaderRow(sh.rows,type);let data=0;if(h.score){for(let i=h.index+1;i<Math.min(sh.rows.length,h.index+80);i++){const r=sh.rows[i]||[];if(r.some(v=>String(v??'').trim()!==''))data++;}}const name=/boq|bill|quantit|school|pricing|priced|schedule/i.test(sh.name)?5:0;return h.score*10+Math.min(data,30)+name;}
+function autoMapHeaders(headers,type){const h=headers.map(normHeader);const aliases=type==='boq'?BOQ_ALIASES:{date:['date','delivery date','transaction date'],material:['material','name','material name','item'],unit:['unit','uom'],qtyReceived:['qty received','quantity received','qty','quantity','received'],unitCost:['unit cost','cost','rate','price'],supplier:['supplier','vendor'],category:['category','material category'],reorder:['reorder','reorder level','minimum stock'],notes:['notes','remarks','comment']};const out={};Object.entries(aliases).forEach(([key,names])=>{let idx=h.findIndex(x=>names.includes(x));if(idx<0)idx=h.findIndex(x=>names.some(a=>x===a||x.includes(a)&&a.length>3));out[key]=idx>=0?idx:''});return out;}
+function setImportDataset(sheetIndex,headerRow){const s=excelImportState;const sh=s.sheets?.[sheetIndex];if(!sh)throw new Error('Worksheet not found.');const hr=Math.max(0,Math.min(headerRow,sh.rows.length-1));s.sheetIndex=sheetIndex;s.headerRow=hr;s.rows=sh.rows;s.headers=(sh.rows[hr]||[]).map(x=>String(x??'').trim());s.mapping=autoMapHeaders(s.headers,s.type);}
 function mapOptions(headers,selected,allowBlank=true){return (allowBlank?'<option value="">— Not mapped —</option>':'')+headers.map((x,i)=>`<option value="${i}" ${String(selected)===String(i)?'selected':''}>${inlineEsc(x||`Column ${i+1}`)}</option>`).join('')}
-function renderImportMapping(){const s=excelImportState,type=s.type,fields=type==='boq'?[['code','Item / Code',false],['description','Description',true],['unit','Unit',false],['quantity','Quantity',true],['rate','Rate',true],['progress','% Complete',false]]:[['date','Date',false],['material','Material',true],['unit','Unit',true],['qtyReceived','Qty Received',true],['unitCost','Unit Cost',true],['supplier','Supplier',false],['category','Category',false],['reorder','Reorder Level',false],['notes','Notes',false]];const sample=s.rows.slice(1,7);const projectInfo=`<div class="import-status">${s.rows.length-1} data row(s) found in <strong>${inlineEsc(s.fileName)}</strong>. Required fields are marked *.</div>`;const maps=`<div class="import-map">${fields.map(([k,label,req])=>`<label>${label}${req?' *':''}<select data-import-map="${k}" onchange="excelImportState.mapping['${k}']=this.value">${mapOptions(s.headers,s.mapping[k],true)}</select></label>`).join('')}</div>`;const preview=`<div class="import-preview"><table><thead><tr>${s.headers.map(h=>`<th>${inlineEsc(h)}</th>`).join('')}</tr></thead><tbody>${sample.map(r=>`<tr>${s.headers.map((_,i)=>`<td>${inlineEsc(r?.[i]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;document.getElementById('importWorkArea').innerHTML=projectInfo+maps+preview+`<div id="importStatus"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="confirmExcelImport()">Import ${s.rows.length-1} Row(s)</button></div>`;}
+function importSheetChanged(v){try{setImportDataset(Number(v),0);excelImportState.headerRow=detectHeaderRow(excelImportState.sheets[Number(v)].rows,excelImportState.type).index;setImportDataset(Number(v),excelImportState.headerRow);renderImportMapping();}catch(e){setImportStatus('Could not change worksheet: '+e.message,'error');}}
+function importHeaderChanged(v){try{setImportDataset(excelImportState.sheetIndex,Number(v));renderImportMapping();}catch(e){setImportStatus('Could not change header row: '+e.message,'error');}}
+function normalizedBoqPreview(){const s=excelImportState;const out=[];for(const row of (s.rows||[]).slice(s.headerRow+1)){if(!row||row.every(v=>String(v??'').trim()===''))continue;const desc=String(importValue(row,'description')||'').trim();const q=cleanNum(importValue(row,'quantity'));const rate=cleanNum(importValue(row,'rate'));const amount=cleanNum(importValue(row,'amount'));if(!desc||q<0||rate<0&&amount<=0)continue;const effectiveRate=rate>0?rate:(q>0&&amount>0?amount/q:0);out.push({code:String(importValue(row,'code')||'').trim(),description:desc,unit:String(importValue(row,'unit')||'').trim(),quantity:q,rate:effectiveRate,amount:amount>0?amount:q*effectiveRate});if(out.length>=10)break;}return out;}
+function renderImportMapping(){const s=excelImportState,type=s.type;const fields=type==='boq'?[['code','Item / Code',false],['description','Description',true],['unit','Unit',false],['quantity','Quantity',true],['rate','Rate',false],['amount','Amount / Total',false],['progress','% Complete',false]]:[['date','Date',false],['material','Material',true],['unit','Unit',true],['qtyReceived','Qty Received',true],['unitCost','Unit Cost',true],['supplier','Supplier',false],['category','Category',false],['reorder','Reorder Level',false],['notes','Notes',false]];
+const sheetOptions=(s.sheets||[]).map((sh,i)=>`<option value="${i}" ${i===s.sheetIndex?'selected':''}>${inlineEsc(sh.name)}</option>`).join('');
+const headerOptions=(s.rows||[]).slice(0,Math.min(120,s.rows.length)).map((r,i)=>{const label=(r||[]).filter(v=>String(v??'').trim()!=='').slice(0,5).map(v=>String(v).trim()).join(' | ');return `<option value="${i}" ${i===s.headerRow?'selected':''}>Row ${i+1}${label?' — '+inlineEsc(label.slice(0,100)):''}</option>`}).join('');
+const dataCount=Math.max(0,(s.rows||[]).length-s.headerRow-1);const maps=`<div class="import-map">${fields.map(([k,label,req])=>`<label>${label}${req?' *':''}<select data-import-map="${k}" onchange="excelImportState.mapping['${k}']=this.value">${mapOptions(s.headers,s.mapping[k],true)}</select></label>`).join('')}</div>`;
+const rawSample=(s.rows||[]).slice(s.headerRow+1,s.headerRow+6);const rawPreview=`<div class="muted" style="margin:12px 0 6px">Raw spreadsheet preview</div><div class="import-preview"><table><thead><tr>${s.headers.map(h=>`<th>${inlineEsc(h)}</th>`).join('')}</tr></thead><tbody>${rawSample.map(r=>`<tr>${s.headers.map((_,i)=>`<td>${inlineEsc(r?.[i]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+const np=type==='boq'?normalizedBoqPreview():[];const normalized=type==='boq'?`<div class="muted" style="margin:12px 0 6px">Streetwise BOQ preview — first ${np.length} detected item(s)</div><div class="import-preview"><table><thead><tr><th>Item / Code</th><th>Description</th><th>Unit</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${np.map(x=>`<tr><td>${inlineEsc(x.code)}</td><td>${inlineEsc(x.description)}</td><td>${inlineEsc(x.unit)}</td><td>${inlineEsc(x.quantity)}</td><td>${inlineEsc(x.rate)}</td><td>${inlineEsc(x.amount)}</td></tr>`).join('')}</tbody></table></div>`:'';
+const controls=(s.sheets||[]).length>1?`<div class="form" style="margin-bottom:10px"><label>Worksheet<select onchange="importSheetChanged(this.value)">${sheetOptions}</select></label><label>Header row<select onchange="importHeaderChanged(this.value)">${headerOptions}</select></label></div>`:`<div class="form" style="margin-bottom:10px"><label>Header row<select onchange="importHeaderChanged(this.value)">${headerOptions}</select></label></div>`;
+const projectInfo=`<div class="import-status">${dataCount} spreadsheet row(s) below the header in <strong>${inlineEsc(s.fileName)}</strong>. Streetwise will import only valid BOQ lines; headings, notes and subtotals are skipped.</div>`;
+document.getElementById('importWorkArea').innerHTML=projectInfo+controls+maps+rawPreview+normalized+`<div id="importStatus"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="confirmExcelImport()">Import Detected BOQ</button></div>`;}
 function importValue(row,key){const i=excelImportState.mapping[key];return i===''||i==null?'':row[Number(i)]??''}
 function cleanNum(v){const n=Number(String(v??'').replace(/[, ]/g,'').replace(/%/g,''));return Number.isFinite(n)?n:0}
 function cleanProgress(v){const raw=String(v??'').trim();const n=cleanNum(raw);if(raw.includes('%'))return Math.max(0,Math.min(100,n));if(n>0&&n<=1)return n*100;return Math.max(0,Math.min(100,n))}
@@ -466,77 +502,18 @@ function excelDate(v){if(v===''||v==null)return new Date().toISOString().slice(0
 function selectedImportProject(){const id=document.getElementById('importProject')?.value;return data.projects.find(p=>String(p.db_id||p.id)===String(id))||null}
 async function ensureImportedMaterialCategory(projectId,name){name=String(name||'General Site Materials').trim()||'General Site Materials';let item=(data.materialCategories||[]).find(c=>String(c.project_id||'')===String(projectId||'')&&c.name.toLowerCase()===name.toLowerCase());if(item)return item;item={id:'CAT-'+Date.now()+'-'+Math.random().toString(16).slice(2),db_id:null,project_id:projectId,name,sort_order:(data.materialCategories||[]).length+1};if(cloudReady&&currentCompany&&projectId){const r=await sb.from('material_categories').insert({company_id:currentCompany.company_id,project_id:projectId,name,sort_order:item.sort_order,created_by:currentUser.id}).select('id').single();if(r.error)throw new Error('Category '+name+': '+r.error.message);item.db_id=r.data.id;item.id=r.data.id;}data.materialCategories.push(item);return item;}
 async function confirmExcelImport(){
-  const status=document.getElementById('importStatus');
-  const button=Array.from(document.querySelectorAll('#importWorkArea button')).find(x=>x.textContent.includes('Import'));
-  const fail=(msg)=>{console.error('Streetwise Excel import failed',msg);setImportStatus('Import failed: '+String(msg?.message||msg),'error');if(button){button.disabled=false;button.textContent=`Import ${(excelImportState.rows||[]).length-1} Row(s)`;}};
-  try{
-    const s=excelImportState||{};
-    const type=s.type;
-    const project=selectedImportProject();
-    if(!type) throw new Error('The import session is empty. Close this window and open Import Excel again.');
-    if(!project) throw new Error('No project is selected. Select a project in the import window.');
-    if(!cloudReady||!currentCompany||!currentUser) throw new Error('Cloud workspace is not ready. Wait until the workspace finishes loading, then try again.');
-
-    const required=type==='boq'?['description','quantity','rate']:['material','unit','qtyReceived','unitCost'];
-    const missing=required.filter(k=>s.mapping?.[k]===''||s.mapping?.[k]==null);
-    if(missing.length) throw new Error('Map the required fields: '+missing.join(', '));
-
-    const parsed=[]; let skipped=0;
-    for(const row of (s.rows||[]).slice(1)){
-      if(!row||row.every(v=>String(v??'').trim()==='')){skipped++;continue;}
-      if(type==='boq'){
-        const item={project:project.name,project_id:project.db_id||project.id,code:String(importValue(row,'code')||'').trim(),description:String(importValue(row,'description')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),quantity:cleanNum(importValue(row,'quantity')),rate:cleanNum(importValue(row,'rate')),actual:0,progress:cleanProgress(importValue(row,'progress'))};
-        item.budget=boqAmount(item);
-        if(!item.description||item.quantity<0||item.rate<0){skipped++;continue;}
-        parsed.push(item);
-      }else{
-        const category=String(importValue(row,'category')||'General Site Materials').trim()||'General Site Materials';
-        const item={date:excelDate(importValue(row,'date')),project:project.name,project_id:project.db_id||project.id,category,name:String(importValue(row,'material')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),qtyReceived:cleanNum(importValue(row,'qtyReceived')),unitCost:cleanNum(importValue(row,'unitCost')),qtyUsed:0,supplier:String(importValue(row,'supplier')||'').trim(),reorder:cleanNum(importValue(row,'reorder')),notes:String(importValue(row,'notes')||'').trim()};
-        item.totalCost=materialTotalCost(item); item.stock=item.qtyReceived;
-        if(!item.name||item.qtyReceived<0||item.unitCost<0||!item.unit){skipped++;continue;}
-        parsed.push(item);
-      }
-    }
-    if(!parsed.length) throw new Error('No valid rows were found. Check the required column mappings and the spreadsheet data.');
-
-    if(button){button.disabled=true;button.textContent='Importing…';}
-    setImportStatus(`Starting import of ${parsed.length} valid row(s)…`,'');
-
-    if(type==='boq'){
-      for(let i=0;i<parsed.length;i++){
-        const x=parsed[i];
-        setImportStatus(`Saving BOQ row ${i+1} of ${parsed.length}: ${inlineEsc(x.description)}`,'');
-        const r=await sb.from('boq_items').insert({company_id:currentCompany.company_id,project_id:x.project_id,code:x.code,description:x.description,unit:x.unit,quantity:x.quantity,rate:x.rate,budget:x.budget,actual:0,progress:x.progress,work_value:boqWorkValue(x),created_by:currentUser.id}).select('id').single();
-        if(r.error) throw new Error(`BOQ row ${i+1} (${x.description}): ${r.error.message}`);
-        x.db_id=r.data.id; x.id=r.data.id;
-      }
-      data.boq.push(...parsed);
-    }else{
-      for(let i=0;i<parsed.length;i++){
-        const x=parsed[i];
-        setImportStatus(`Saving material receipt ${i+1} of ${parsed.length}: ${inlineEsc(x.name)}`,'');
-        const r=await sb.from('material_records').insert({company_id:currentCompany.company_id,project_id:x.project_id,category:x.category,transaction_date:x.date,name:x.name,unit:x.unit,qty_received:x.qtyReceived,unit_cost:x.unitCost,total_cost:x.totalCost,supplier:x.supplier,qty_used:0,stock:x.stock,reorder:x.reorder,notes:x.notes,created_by:currentUser.id}).select('id').single();
-        if(r.error) throw new Error(`Material row ${i+1} (${x.name}): ${r.error.message}`);
-        x.db_id=r.data.id; x.id=r.data.id;
-        // Category creation is deliberately non-blocking: the receipt itself is the source of truth.
-        try{await ensureImportedMaterialCategory(x.project_id,x.category);}catch(catErr){console.warn('Category setup skipped for imported material',catErr);}
-      }
-      data.materials.push(...parsed);
-    }
-
-    // Do not call loadCloudWorkspace() or persistCloud() here. Both touch unrelated
-    // workspace records and can make a successful normalized insert look like a failed import.
-    localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
-    currentProjectId=project.db_id||project.id;
-    excelImportState={type:null,rows:[],headers:[],mapping:{},fileName:''};
-    setImportStatus(`Import complete: ${parsed.length} row(s) saved${skipped?` · ${skipped} skipped`:''}.`,'ok');
-    await new Promise(resolve=>setTimeout(resolve,350));
-    closeModal();
-    render();
-    show(type==='boq'?'boq':'materials');
-    toast(`${parsed.length} ${type==='boq'?'BOQ item':'material receipt'}${parsed.length===1?'':'s'} imported successfully${skipped?` · ${skipped} skipped`:''}`);
-  }catch(e){fail(e);}
-}
+  const button=Array.from(document.querySelectorAll('#importWorkArea button')).find(x=>x.textContent.includes('Import'));const fail=(msg)=>{console.error('Streetwise Excel import failed',msg);setImportStatus('Import failed: '+String(msg?.message||msg),'error');if(button){button.disabled=false;button.textContent='Import Detected BOQ';}};
+  try{const s=excelImportState||{};const type=s.type;const project=selectedImportProject();if(!type)throw new Error('The import session is empty.');if(!project)throw new Error('No project is selected.');if(!cloudReady||!currentCompany||!currentUser)throw new Error('Cloud workspace is not ready. Wait until the workspace finishes loading, then try again.');
+    const required=type==='boq'?['description','quantity']:['material','unit','qtyReceived','unitCost'];const missing=required.filter(k=>s.mapping?.[k]===''||s.mapping?.[k]==null);if(missing.length)throw new Error('Map the required fields: '+missing.join(', '));
+    const parsed=[];let skipped=0;
+    for(const row of (s.rows||[]).slice(s.headerRow+1)){if(!row||row.every(v=>String(v??'').trim()==='')){skipped++;continue;}
+      if(type==='boq'){const desc=String(importValue(row,'description')||'').trim();const quantity=cleanNum(importValue(row,'quantity'));const amountMapped=s.mapping.amount!==''&&s.mapping.amount!=null;const amount=amountMapped?cleanNum(importValue(row,'amount')):0;let rate=cleanNum(importValue(row,'rate'));if(!desc||quantity<0||(!rate&&!(amount>0&&quantity>0))){skipped++;continue;}if(!rate&&amount>0&&quantity>0)rate=amount/quantity;const item={project:project.name,project_id:project.db_id||project.id,code:String(importValue(row,'code')||'').trim(),description:desc,unit:String(importValue(row,'unit')||'').trim(),quantity,rate,actual:0,progress:cleanProgress(importValue(row,'progress'))};item.budget=boqAmount(item);parsed.push(item);
+      }else{const category=String(importValue(row,'category')||'General Site Materials').trim()||'General Site Materials';const item={date:excelDate(importValue(row,'date')),project:project.name,project_id:project.db_id||project.id,category,name:String(importValue(row,'material')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),qtyReceived:cleanNum(importValue(row,'qtyReceived')),unitCost:cleanNum(importValue(row,'unitCost')),qtyUsed:0,supplier:String(importValue(row,'supplier')||'').trim(),reorder:cleanNum(importValue(row,'reorder')),notes:String(importValue(row,'notes')||'').trim()};item.totalCost=materialTotalCost(item);item.stock=item.qtyReceived;if(!item.name||item.qtyReceived<0||item.unitCost<0||!item.unit){skipped++;continue;}parsed.push(item);}}
+    if(!parsed.length)throw new Error('No valid rows were found. Check the required mappings and spreadsheet data.');if(button){button.disabled=true;button.textContent='Importing…';}setImportStatus(`Starting import of ${parsed.length} valid row(s)…`,'');
+    if(type==='boq'){for(let i=0;i<parsed.length;i++){const x=parsed[i];setImportStatus(`Saving BOQ row ${i+1} of ${parsed.length}: ${x.description}`,'');const r=await sb.from('boq_items').insert({company_id:currentCompany.company_id,project_id:x.project_id,code:x.code,description:x.description,unit:x.unit,quantity:x.quantity,rate:x.rate,budget:x.budget,actual:0,progress:x.progress,work_value:boqWorkValue(x),created_by:currentUser.id}).select('id').single();if(r.error)throw new Error(`BOQ row ${i+1} (${x.description}): ${r.error.message}`);x.db_id=r.data.id;x.id=r.data.id;}data.boq.push(...parsed);
+    }else{for(let i=0;i<parsed.length;i++){const x=parsed[i];setImportStatus(`Saving material receipt ${i+1} of ${parsed.length}: ${x.name}`,'');const r=await sb.from('material_records').insert({company_id:currentCompany.company_id,project_id:x.project_id,category:x.category,transaction_date:x.date,name:x.name,unit:x.unit,qty_received:x.qtyReceived,unit_cost:x.unitCost,total_cost:x.totalCost,supplier:x.supplier,qty_used:0,stock:x.stock,reorder:x.reorder,notes:x.notes,created_by:currentUser.id}).select('id').single();if(r.error)throw new Error(`Material row ${i+1} (${x.name}): ${r.error.message}`);x.db_id=r.data.id;x.id=r.data.id;try{await ensureImportedMaterialCategory(x.project_id,x.category);}catch(catErr){console.warn('Category setup skipped for imported material',catErr);}}data.materials.push(...parsed);}
+    localStorage.setItem('streetwiseDataV2',JSON.stringify(data));currentProjectId=project.db_id||project.id;excelImportState={type:null,rows:[],headers:[],mapping:{},fileName:'',sheets:[],sheetIndex:0,headerRow:0};closeModal();render();show(type==='boq'?'boq':'materials');toast(`${parsed.length} ${type==='boq'?'BOQ item':'material receipt'}${parsed.length===1?'':'s'} imported successfully${skipped?` · ${skipped} skipped`:''}`);
+  }catch(e){fail(e);}}
 function setImportStatus(message,kind){const e=document.getElementById('importStatus');if(e)e.innerHTML=`<div class="import-status ${kind==='error'?'import-error':kind==='ok'?'import-ok':'import-warn'}>${inlineEsc(message)}</div>`}
 
 function recordById(t,id){const key=String(id);return (data[t==='project'?'projects':t==='boq'?'boq':t==='material'?'materials':t==='labour'?'labour':t==='procurement'?'procurement':t==='progress'?'projects':t==='variation'?'variations':t==='report'?'reports':t==='snag'?'snags':'expenses']||[]).find(x=>String(x.db_id||x.id)===key)}
@@ -838,7 +815,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=7');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=8');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

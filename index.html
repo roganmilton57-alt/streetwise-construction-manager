@@ -464,15 +464,15 @@ async function parseXlsxWorkbook(file){
 }
 async function handleExcelFile(file,type){
   if(!file)return;
-  file=Object.assign(file,{name:String(file.name||'uploaded.xlsx')});const area=document.getElementById('importWorkArea');area.innerHTML='<div class="import-status">Reading '+inlineEsc(file.name)+'…</div>';
+  const fileName=String(file.name||'uploaded.xlsx');const area=document.getElementById('importWorkArea');area.innerHTML='<div class="import-status">Reading '+inlineEsc(fileName)+'…</div>';
   try{
     let sheets;
-    if(String(file.name||'').toLowerCase().endsWith('.csv')) sheets=[{name:file.name,rows:csvRows(await file.text())}];
+    if(fileName.toLowerCase().endsWith('.csv')) sheets=[{name:file.name,rows:csvRows(await file.text())}];
     else sheets=await parseXlsxWorkbook(file);
     if(!sheets?.length)throw new Error('No worksheets were found in the file.');
     const scored=sheets.map((sh,i)=>({i,score:scoreSheet(sh,type),header:detectHeaderRow(sh.rows,type)})).sort((a,b)=>b.score-a.score);
     const chosen=scored[0]?.i??0;const header=scored[0]?.header?.index??0;
-    excelImportState={type,rows:sheets[chosen].rows,headers:[],mapping:{},fileName:file.name,sheets,sheetIndex:chosen,headerRow:header};
+    excelImportState={type,rows:sheets[chosen].rows,headers:[],mapping:{},fileName:fileName,sheets,sheetIndex:chosen,headerRow:header};
     setImportDataset(chosen,header);renderImportMapping();
   }catch(e){area.innerHTML=`<div class="import-status import-error">Could not read the file: ${inlineEsc(e?.message||e||'Unknown Excel error')}<br><small>If this persists, the file parser rejected the workbook structure. Try selecting the workbook again.</small></div>`;}
 }
@@ -816,7 +816,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=9');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=10');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

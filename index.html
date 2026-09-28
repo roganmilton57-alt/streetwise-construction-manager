@@ -466,80 +466,77 @@ function excelDate(v){if(v===''||v==null)return new Date().toISOString().slice(0
 function selectedImportProject(){const id=document.getElementById('importProject')?.value;return data.projects.find(p=>String(p.db_id||p.id)===String(id))||null}
 async function ensureImportedMaterialCategory(projectId,name){name=String(name||'General Site Materials').trim()||'General Site Materials';let item=(data.materialCategories||[]).find(c=>String(c.project_id||'')===String(projectId||'')&&c.name.toLowerCase()===name.toLowerCase());if(item)return item;item={id:'CAT-'+Date.now()+'-'+Math.random().toString(16).slice(2),db_id:null,project_id:projectId,name,sort_order:(data.materialCategories||[]).length+1};if(cloudReady&&currentCompany&&projectId){const r=await sb.from('material_categories').insert({company_id:currentCompany.company_id,project_id:projectId,name,sort_order:item.sort_order,created_by:currentUser.id}).select('id').single();if(r.error)throw new Error('Category '+name+': '+r.error.message);item.db_id=r.data.id;item.id=r.data.id;}data.materialCategories.push(item);return item;}
 async function confirmExcelImport(){
-  const s=excelImportState,type=s.type,project=selectedImportProject();
-  const required=type==='boq'?['description','quantity','rate']:['material','unit','qtyReceived','unitCost'];
-  if(!project){setImportStatus('Select a project before importing.','error');return;}
-  const missing=required.filter(k=>s.mapping[k]===''||s.mapping[k]==null);
-  if(missing.length){setImportStatus('Map the required fields: '+missing.join(', '),'error');return;}
-
-  const parsed=[]; let skipped=0;
-  s.rows.slice(1).forEach((row)=>{
-    if(!row||row.every(v=>String(v??'').trim()==='')){skipped++;return;}
-    if(type==='boq'){
-      const item={project:project.name,project_id:project.db_id||project.id,code:String(importValue(row,'code')||''),description:String(importValue(row,'description')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),quantity:cleanNum(importValue(row,'quantity')),rate:cleanNum(importValue(row,'rate')),actual:0,progress:cleanProgress(importValue(row,'progress'))};
-      item.budget=boqAmount(item);
-      if(!item.description||item.quantity<0||item.rate<0){skipped++;return;}
-      parsed.push(item);
-    }else{
-      const category=String(importValue(row,'category')||'General Site Materials').trim()||'General Site Materials';
-      const item={date:excelDate(importValue(row,'date')),project:project.name,project_id:project.db_id||project.id,category,name:String(importValue(row,'material')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),qtyReceived:cleanNum(importValue(row,'qtyReceived')),unitCost:cleanNum(importValue(row,'unitCost')),qtyUsed:0,supplier:String(importValue(row,'supplier')||'').trim(),reorder:cleanNum(importValue(row,'reorder')),notes:String(importValue(row,'notes')||'').trim()};
-      item.totalCost=materialTotalCost(item); item.stock=item.qtyReceived;
-      if(!item.name||item.qtyReceived<0||item.unitCost<0||!item.unit){skipped++;return;}
-      parsed.push(item);
-    }
-  });
-
-  if(!parsed.length){setImportStatus('No valid rows were found to import. Check the column mapping and data.','error');return;}
   const status=document.getElementById('importStatus');
   const button=Array.from(document.querySelectorAll('#importWorkArea button')).find(x=>x.textContent.includes('Import'));
-  if(button){button.disabled=true;button.textContent='Importing…';}
-  setImportStatus('Preparing '+parsed.length+' row(s)…','');
-
+  const fail=(msg)=>{console.error('Streetwise Excel import failed',msg);setImportStatus('Import failed: '+String(msg?.message||msg),'error');if(button){button.disabled=false;button.textContent=`Import ${(excelImportState.rows||[]).length-1} Row(s)`;}};
   try{
-    if(!cloudReady||!currentCompany||!currentUser){throw new Error('Cloud workspace is not ready. Please wait for the project to finish loading, then try again.');}
+    const s=excelImportState||{};
+    const type=s.type;
+    const project=selectedImportProject();
+    if(!type) throw new Error('The import session is empty. Close this window and open Import Excel again.');
+    if(!project) throw new Error('No project is selected. Select a project in the import window.');
+    if(!cloudReady||!currentCompany||!currentUser) throw new Error('Cloud workspace is not ready. Wait until the workspace finishes loading, then try again.');
+
+    const required=type==='boq'?['description','quantity','rate']:['material','unit','qtyReceived','unitCost'];
+    const missing=required.filter(k=>s.mapping?.[k]===''||s.mapping?.[k]==null);
+    if(missing.length) throw new Error('Map the required fields: '+missing.join(', '));
+
+    const parsed=[]; let skipped=0;
+    for(const row of (s.rows||[]).slice(1)){
+      if(!row||row.every(v=>String(v??'').trim()==='')){skipped++;continue;}
+      if(type==='boq'){
+        const item={project:project.name,project_id:project.db_id||project.id,code:String(importValue(row,'code')||'').trim(),description:String(importValue(row,'description')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),quantity:cleanNum(importValue(row,'quantity')),rate:cleanNum(importValue(row,'rate')),actual:0,progress:cleanProgress(importValue(row,'progress'))};
+        item.budget=boqAmount(item);
+        if(!item.description||item.quantity<0||item.rate<0){skipped++;continue;}
+        parsed.push(item);
+      }else{
+        const category=String(importValue(row,'category')||'General Site Materials').trim()||'General Site Materials';
+        const item={date:excelDate(importValue(row,'date')),project:project.name,project_id:project.db_id||project.id,category,name:String(importValue(row,'material')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),qtyReceived:cleanNum(importValue(row,'qtyReceived')),unitCost:cleanNum(importValue(row,'unitCost')),qtyUsed:0,supplier:String(importValue(row,'supplier')||'').trim(),reorder:cleanNum(importValue(row,'reorder')),notes:String(importValue(row,'notes')||'').trim()};
+        item.totalCost=materialTotalCost(item); item.stock=item.qtyReceived;
+        if(!item.name||item.qtyReceived<0||item.unitCost<0||!item.unit){skipped++;continue;}
+        parsed.push(item);
+      }
+    }
+    if(!parsed.length) throw new Error('No valid rows were found. Check the required column mappings and the spreadsheet data.');
+
+    if(button){button.disabled=true;button.textContent='Importing…';}
+    setImportStatus(`Starting import of ${parsed.length} valid row(s)…`,'');
 
     if(type==='boq'){
-      // Insert in small, explicit batches so one bad row cannot make the whole import appear to do nothing.
       for(let i=0;i<parsed.length;i++){
         const x=parsed[i];
-        setImportStatus(`Saving BOQ row ${i+1} of ${parsed.length}…`,'');
+        setImportStatus(`Saving BOQ row ${i+1} of ${parsed.length}: ${inlineEsc(x.description)}`,'');
         const r=await sb.from('boq_items').insert({company_id:currentCompany.company_id,project_id:x.project_id,code:x.code,description:x.description,unit:x.unit,quantity:x.quantity,rate:x.rate,budget:x.budget,actual:0,progress:x.progress,work_value:boqWorkValue(x),created_by:currentUser.id}).select('id').single();
-        if(r.error)throw new Error(`BOQ row ${i+1} (${x.description}): ${r.error.message}`);
-        x.db_id=r.data.id;
+        if(r.error) throw new Error(`BOQ row ${i+1} (${x.description}): ${r.error.message}`);
+        x.db_id=r.data.id; x.id=r.data.id;
       }
       data.boq.push(...parsed);
     }else{
-      for(const x of parsed){await ensureImportedMaterialCategory(x.project_id,x.category);}
       for(let i=0;i<parsed.length;i++){
         const x=parsed[i];
-        setImportStatus(`Saving material receipt ${i+1} of ${parsed.length}…`,'');
+        setImportStatus(`Saving material receipt ${i+1} of ${parsed.length}: ${inlineEsc(x.name)}`,'');
         const r=await sb.from('material_records').insert({company_id:currentCompany.company_id,project_id:x.project_id,category:x.category,transaction_date:x.date,name:x.name,unit:x.unit,qty_received:x.qtyReceived,unit_cost:x.unitCost,total_cost:x.totalCost,supplier:x.supplier,qty_used:0,stock:x.stock,reorder:x.reorder,notes:x.notes,created_by:currentUser.id}).select('id').single();
-        if(r.error)throw new Error(`Material row ${i+1} (${x.name}): ${r.error.message}`);
-        x.db_id=r.data.id;
+        if(r.error) throw new Error(`Material row ${i+1} (${x.name}): ${r.error.message}`);
+        x.db_id=r.data.id; x.id=r.data.id;
+        // Category creation is deliberately non-blocking: the receipt itself is the source of truth.
+        try{await ensureImportedMaterialCategory(x.project_id,x.category);}catch(catErr){console.warn('Category setup skipped for imported material',catErr);}
       }
       data.materials.push(...parsed);
     }
 
-    // Re-read the normalized records from Supabase. This is the source of truth for BOQ
-    // and Materials, so the importer does not depend on a workspace_data payload write.
-    setImportStatus('Import saved. Refreshing the project records…','ok');
-    const rm=currentModuleId || (type==='boq'?'boq':'materials');
-    const rp=currentProjectId;
-    const loaded=await loadCloudWorkspace();
-    if(!loaded)throw new Error(cloudLoadError||'The records were saved, but Streetwise could not refresh the project data.');
-    currentProjectId=rp;
+    // Do not call loadCloudWorkspace() or persistCloud() here. Both touch unrelated
+    // workspace records and can make a successful normalized insert look like a failed import.
+    localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
+    currentProjectId=project.db_id||project.id;
     excelImportState={type:null,rows:[],headers:[],mapping:{},fileName:''};
+    setImportStatus(`Import complete: ${parsed.length} row(s) saved${skipped?` · ${skipped} skipped`:''}.`,'ok');
+    await new Promise(resolve=>setTimeout(resolve,350));
     closeModal();
     render();
-    show(rm);
-    toast(`${parsed.length} ${type==='boq'?'BOQ item':'material receipt'}${parsed.length===1?'':'s'} imported${skipped?' · '+skipped+' skipped':''}`);
-  }catch(e){
-    console.error('Streetwise Excel import failed',e);
-    setImportStatus('Import failed: '+(e.message||e),'error');
-    if(button){button.disabled=false;button.textContent=`Import ${s.rows.length-1} Row(s)`;}
-  }
+    show(type==='boq'?'boq':'materials');
+    toast(`${parsed.length} ${type==='boq'?'BOQ item':'material receipt'}${parsed.length===1?'':'s'} imported successfully${skipped?` · ${skipped} skipped`:''}`);
+  }catch(e){fail(e);}
 }
-
 function setImportStatus(message,kind){const e=document.getElementById('importStatus');if(e)e.innerHTML=`<div class="import-status ${kind==='error'?'import-error':kind==='ok'?'import-ok':'import-warn'}>${inlineEsc(message)}</div>`}
 
 function recordById(t,id){const key=String(id);return (data[t==='project'?'projects':t==='boq'?'boq':t==='material'?'materials':t==='labour'?'labour':t==='procurement'?'procurement':t==='progress'?'projects':t==='variation'?'variations':t==='report'?'reports':t==='snag'?'snags':'expenses']||[]).find(x=>String(x.db_id||x.id)===key)}
@@ -841,7 +838,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=6');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=7');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || c.SUPABASE_URL.includes('YOUR-PROJECT') || !c.SUPABASE_PUBLISHABLE_KEY || c.SUPABASE_PUBLISHABLE_KEY.includes('YOUR_SUPABASE')){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

@@ -430,7 +430,7 @@ const scopedNote=currentProject()?`<span class="muted">Showing ${currentProject(
 document.getElementById('modules').innerHTML=[
 dashboard(),
 projectsHome(),
-table('boq','BOQ & Cost Control',['Project','Item','Description','Unit','Qty','Rate','Amount','Actual Cost','Variance','% Complete','Work Value','Actions'],b,`<button class="btn" onclick="openModal('excelImport','boq')">⇧ Import Excel</button><button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
+table('boq','BOQ & Cost Control',['Project','Item','Description','Unit','Qty','Rate','Amount','Actual Cost','Variance','% Complete','Work Value','Actions'],b,`${currentProject()?'<button class="btn" onclick="replaceEntireBoq()">↻ Replace Entire BOQ</button>':''}<button class="btn" onclick="openModal('excelImport','boq')">⇧ Import Excel</button><button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
 materialsSection(m,ms,mu),
 table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost','Actions'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),
 table('procurement','Procurement',['Item','Supplier','Quantity','Value','Status','Actions'],q,`${scopedNote}<button class="btn primary" onclick="openModal('procurement')">+ Purchase</button>`),
@@ -591,6 +591,41 @@ async function updateRecord(t,id){
   if(returnProjectId) currentProjectId=returnProjectId;
   show(returnModule);
   toast('Changes saved');
+}
+async function replaceEntireBoq(){
+  const project=currentProject();
+  const projectId=project?.db_id||project?.id;
+  if(!project||!projectId){
+    toast('Open a project first');
+    return;
+  }
+
+  const rows=(data.boq||[]).filter(x=>String(x.project_id||'')===String(projectId)||String(x.project||'')===String(project.name));
+  const count=rows.length;
+  if(!count){
+    toast('This project has no BOQ items to remove');
+    return;
+  }
+
+  const confirmed=confirm(`Replace the entire BOQ for \"${project.name}\"?\n\nThis will permanently delete ${count} BOQ item${count===1?'':'s'} for this project only. Materials, Labour, Expenses, Variations and other project data will not be affected.\n\nContinue?`);
+  if(!confirmed)return;
+
+  if(cloudReady&&currentCompany){
+    const r=await sb.from('boq_items')
+      .delete()
+      .eq('company_id',currentCompany.company_id)
+      .eq('project_id',projectId);
+    if(r.error){
+      toast('BOQ replacement failed: '+r.error.message);
+      return;
+    }
+  }
+
+  data.boq=(data.boq||[]).filter(x=>!(String(x.project_id||'')===String(projectId)||String(x.project||'')===String(project.name)));
+  save();
+  render();
+  show('boq');
+  toast(`Entire BOQ removed for ${project.name}. You can now import the replacement Excel BOQ.`);
 }
 async function deleteRecord(t,id){
   const returnModule=currentModuleId||'dashboard';
@@ -846,7 +881,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=13');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=14');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

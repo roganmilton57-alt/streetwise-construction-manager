@@ -254,6 +254,7 @@ function formatPct(v){return `${Number(v||0).toFixed(1)}%`}
 function boqAmount(x){const q=Number(x.quantity),r=Number(x.rate);return q>0&&r>=0?q*r:Number(x.budget||0)}
 function boqWorkValue(x){return boqAmount(x)*(Math.max(0,Math.min(100,Number(x.progress||0)))/100)}
 function boqPlannedValue(x){return boqAmount(x)*(Math.max(0,Math.min(100,Number(x.plannedProgress||0)))/100)}
+function deriveProgressStatus(x){const actual=Math.max(0,Math.min(100,Number(x?.progress||0)));const current=String(x?.progressStatus||'').trim().toLowerCase();if(current==='on hold')return 'On Hold';if(actual>=100)return 'Complete';if(actual>0)return 'In Progress';return 'Not Started';}
 function projectProgressStats(pid){
   const rows=data.boq.filter(x=>String(x.project_id||'')===String(pid));
   const budget=rows.reduce((a,x)=>a+boqAmount(x),0);
@@ -263,7 +264,7 @@ function projectProgressStats(pid){
   const actual=budget?actualWork/budget*100:0;
   const variance=actual-planned;
   const counts={notStarted:0,inProgress:0,complete:0,onHold:0};
-  rows.forEach(x=>{const st=String(x.progressStatus||'').toLowerCase();if(st==='complete'||Number(x.progress||0)>=100)counts.complete++;else if(st==='on hold')counts.onHold++;else if(Number(x.progress||0)>0||st==='in progress')counts.inProgress++;else counts.notStarted++;});
+  rows.forEach(x=>{const st=deriveProgressStatus(x).toLowerCase();if(st==='complete')counts.complete++;else if(st==='on hold')counts.onHold++;else if(st==='in progress')counts.inProgress++;else counts.notStarted++;});
   return {rows,budget,plannedWork,actualWork,planned,actual,variance,counts};
 }
 function projectBoqStats(pid){
@@ -390,7 +391,7 @@ async function inlineSave(el){
       else if(field==='quantity')x.quantity=Number(value),patch.quantity=x.quantity;
       else if(field==='rate')x.rate=Number(value),patch.rate=x.rate;
       else if(field==='actual')x.actual=Number(value),patch.actual=x.actual;
-      else if(field==='progress')x.progress=Math.max(0,Math.min(100,Number(value))),patch.progress=x.progress;
+      else if(field==='progress'){x.progress=Math.max(0,Math.min(100,Number(value)));patch.progress=x.progress;if(String(x.progressStatus||'').toLowerCase()!=='on hold'){x.progressStatus=deriveProgressStatus(x);patch.progress_status=x.progressStatus;}}
       else if(field==='plannedProgress')x.plannedProgress=Math.max(0,Math.min(100,Number(value))),patch.planned_progress=x.plannedProgress;
       else if(field==='progressStatus')x.progressStatus=String(value),patch.progress_status=x.progressStatus;
       else if(field==='progressNotes')x.progressNotes=String(value),patch.progress_notes=x.progressNotes;
@@ -432,7 +433,7 @@ function progressSection(projectRowsHtml){
   const cp=currentProject();
   const rows=(cp?projectRows(data.boq):[]).map(x=>{
     const amount=boqAmount(x), planned=Number(x.plannedProgress||0), actual=Number(x.progress||0), variance=actual-planned;
-    const status=x.progressStatus||'Not Started';
+    const status=deriveProgressStatus(x);
     return `<tr><td>${inlineEsc(x.code||'')}</td><td><strong>${inlineEsc(x.description||'')}</strong><div class="muted">${inlineEsc(x.unit||'')} · ${num(x.quantity||0)} @ ${money(x.rate||0)}</div></td><td>${money(amount)}</td><td>${inlineCell('boq',x,'plannedProgress',formatPct(planned),{numeric:true,step:'0.01'})}</td><td>${inlineCell('boq',x,'progress',formatPct(actual),{numeric:true,step:'0.01'})}</td><td class="${variance<0?'down':'up'}">${variance>=0?'+':''}${formatPct(variance)}</td><td>${inlineCell('boq',x,'progressStatus',status)}</td><td>${inlineCell('boq',x,'progressNotes',x.progressNotes||'')}</td></tr>`;
   }).join('');
   if(!cp) return table('progress','Progress Tracking',['Project','Planned Progress','Actual Progress','Variance','BOQ Budget','Action'],projectRowsHtml,'');
@@ -443,7 +444,7 @@ function render(){
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
 const act=(t,x)=>`<td><div class="module-tools"><button class="btn" onclick="event.stopPropagation();editRecord('${t}','${x.db_id||x.id}')">Edit</button>${t==='progress'?'':`<button class="btn" onclick="event.stopPropagation();deleteRecord('${t}','${x.db_id||x.id}')">Delete</button>`}</div></td>`;
 let p=visibleProjects.map(x=>`<tr onclick="openProject('${x.db_id||x.id}')" style="cursor:pointer"><td><strong>${x.name}</strong></td><td>${x.client}</td><td>${x.location}</td><td>${money(x.budget)}</td><td>${x.progress||0}%</td><td><span class="pill ${x.status==='Active'?'green':'orange'}">${x.status}</span></td>${act('project',x)}</tr>`).join('');
-let b=projectRows(data.boq).map(x=>{const amount=boqAmount(x),work=boqWorkValue(x);return `<tr><td>${x.project||''}</td><td>${inlineCell('boq',x,'code',x.code)}</td><td><strong>${inlineCell('boq',x,'description',x.description)}</strong></td><td>${inlineCell('boq',x,'unit',x.unit||'')}</td><td>${inlineCell('boq',x,'quantity',num(x.quantity),{numeric:true,step:'0.01'})}</td><td>${inlineCell('boq',x,'rate',num(x.rate),{numeric:true,step:'0.01'})}</td><td>${money(amount)}</td><td>${inlineCell('boq',x,'actual',num(x.actual),{numeric:true,step:'0.01'})}</td><td class="${x.actual>amount?'down':'up'}">${money(amount-x.actual)}</td><td>${inlineCell('boq',x,'plannedProgress',formatPct(x.plannedProgress),{numeric:true,step:'0.01'})}</td><td>${inlineCell('boq',x,'progress',formatPct(x.progress),{numeric:true,step:'0.01'})}</td><td>${formatPct(Number(x.progress||0)-Number(x.plannedProgress||0))}</td><td>${money(work)}</td><td>${inlineCell('boq',x,'progressStatus',x.progressStatus||'Not Started')}</td>${act('boq',x)}</tr>`}).join('');
+let b=projectRows(data.boq).map(x=>{const amount=boqAmount(x),work=boqWorkValue(x);return `<tr><td>${x.project||''}</td><td>${inlineCell('boq',x,'code',x.code)}</td><td><strong>${inlineCell('boq',x,'description',x.description)}</strong></td><td>${inlineCell('boq',x,'unit',x.unit||'')}</td><td>${inlineCell('boq',x,'quantity',num(x.quantity),{numeric:true,step:'0.01'})}</td><td>${inlineCell('boq',x,'rate',num(x.rate),{numeric:true,step:'0.01'})}</td><td>${money(amount)}</td><td>${inlineCell('boq',x,'actual',num(x.actual),{numeric:true,step:'0.01'})}</td><td class="${x.actual>amount?'down':'up'}">${money(amount-x.actual)}</td><td>${inlineCell('boq',x,'plannedProgress',formatPct(x.plannedProgress),{numeric:true,step:'0.01'})}</td><td>${inlineCell('boq',x,'progress',formatPct(x.progress),{numeric:true,step:'0.01'})}</td><td>${formatPct(Number(x.progress||0)-Number(x.plannedProgress||0))}</td><td>${money(work)}</td><td>${inlineCell('boq',x,'progressStatus',deriveProgressStatus(x))}</td>${act('boq',x)}</tr>`}).join('');
 let m=materialRowsByCategory(projectRows(data.materials)).sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>`<tr><td>${inlineCell('material',x,'date',x.date||'')}</td><td>${inlineEsc(materialCategoryFor(x))}</td><td>${x.project||'General / Company Stock'}</td><td><strong>${inlineCell('material',x,'name',x.name)}</strong></td><td>${inlineCell('material',x,'unit',x.unit||'')}</td><td>${inlineCell('material',x,'qtyReceived',num(x.qtyReceived||0),{numeric:true,step:'0.01'})}</td><td>${inlineCell('material',x,'unitCost',num(x.unitCost||0),{numeric:true,step:'0.01'})}</td><td>${money(materialTotalCost(x))}</td><td>${inlineCell('material',x,'supplier',x.supplier||'')}</td><td>${inlineCell('material',x,'notes',x.notes||'')}</td>${act('material',x)}</tr>`).join('');
 let ms=materialRowsByCategory(materialSummaryRows()).map(x=>`<tr><td>${inlineEsc(x.category)}</td><td><strong>${inlineEsc(x.name)}</strong></td><td>${inlineEsc(x.project)}</td><td>${inlineEsc(x.unit)}</td><td>${num(x.received)}</td><td>${num(x.usage)}</td><td><strong>${num(x.balance)}</strong></td><td>${money(x.avgCost)}</td><td>${money(x.value)}</td><td>${x.reorder>0&&x.balance<=x.reorder?'<span class="pill red">Reorder</span>':'<span class="pill green">OK</span>'}</td></tr>`).join('');
 let mu=materialRowsByCategory(projectRows(data.materialUsage||[])).sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>`<tr><td>${inlineEsc(x.date||'')}</td><td>${inlineEsc(materialCategoryFor(x))}</td><td>${inlineEsc(x.project||'General / Company Stock')}</td><td><strong>${inlineEsc(x.name||'')}</strong></td><td>${inlineEsc(x.unit||'')}</td><td>${num(x.quantity||0)}</td><td>${inlineEsc(x.usedFor||'')}</td><td>${inlineEsc(x.notes||'')}</td><td><button class="btn" onclick="deleteMaterialUsage('${x.db_id||x.id}')">Delete</button></td></tr>`).join('');
@@ -566,7 +567,7 @@ async function confirmExcelImport(){
     const required=type==='boq'?['description','quantity']:['material','unit','qtyReceived','unitCost'];const missing=required.filter(k=>s.mapping?.[k]===''||s.mapping?.[k]==null);if(missing.length)throw new Error('Map the required fields: '+missing.join(', '));
     const parsed=[];let skipped=0;
     for(const row of (s.rows||[]).slice(s.headerRow+1)){if(!row||row.every(v=>String(v??'').trim()==='')){skipped++;continue;}
-      if(type==='boq'){const desc=String(importValue(row,'description')||'').trim();const quantity=cleanNum(importValue(row,'quantity'));const amountMapped=s.mapping.amount!==''&&s.mapping.amount!=null;const amount=amountMapped?cleanNum(importValue(row,'amount')):0;let rate=cleanNum(importValue(row,'rate'));if(!desc||quantity<0||(!rate&&!(amount>0&&quantity>0))){skipped++;continue;}if(!rate&&amount>0&&quantity>0)rate=amount/quantity;const item={project:project.name,project_id:project.db_id||project.id,code:String(importValue(row,'code')||'').trim(),description:desc,unit:String(importValue(row,'unit')||'').trim(),quantity,rate,actual:0,progress:cleanProgress(importValue(row,'progress')),plannedProgress:0,progressStatus:'Not Started',progressNotes:''};item.budget=boqAmount(item);parsed.push(item);
+      if(type==='boq'){const desc=String(importValue(row,'description')||'').trim();const quantity=cleanNum(importValue(row,'quantity'));const amountMapped=s.mapping.amount!==''&&s.mapping.amount!=null;const amount=amountMapped?cleanNum(importValue(row,'amount')):0;let rate=cleanNum(importValue(row,'rate'));if(!desc||quantity<0||(!rate&&!(amount>0&&quantity>0))){skipped++;continue;}if(!rate&&amount>0&&quantity>0)rate=amount/quantity;const item={project:project.name,project_id:project.db_id||project.id,code:String(importValue(row,'code')||'').trim(),description:desc,unit:String(importValue(row,'unit')||'').trim(),quantity,rate,actual:0,progress:cleanProgress(importValue(row,'progress')),plannedProgress:0,progressStatus:'Not Started',progressNotes:''};item.budget=boqAmount(item);item.progressStatus=deriveProgressStatus(item);parsed.push(item);
       }else{const category=String(importValue(row,'category')||'General Site Materials').trim()||'General Site Materials';const item={date:excelDate(importValue(row,'date')),project:project.name,project_id:project.db_id||project.id,category,name:String(importValue(row,'material')||'').trim(),unit:String(importValue(row,'unit')||'').trim(),qtyReceived:cleanNum(importValue(row,'qtyReceived')),unitCost:cleanNum(importValue(row,'unitCost')),qtyUsed:0,supplier:String(importValue(row,'supplier')||'').trim(),reorder:cleanNum(importValue(row,'reorder')),notes:String(importValue(row,'notes')||'').trim()};item.totalCost=materialTotalCost(item);item.stock=item.qtyReceived;if(!item.name||item.qtyReceived<0||item.unitCost<0||!item.unit){skipped++;continue;}parsed.push(item);}}
     if(!parsed.length)throw new Error('No valid rows were found. Check the required mappings and spreadsheet data.');if(button){button.disabled=true;button.textContent='Importing…';}setImportStatus(`Starting import of ${parsed.length} valid row(s)…`,'');
     if(type==='boq'){for(let i=0;i<parsed.length;i++){const x=parsed[i];setImportStatus(`Saving BOQ row ${i+1} of ${parsed.length}: ${x.description}`,'');const r=await sb.from('boq_items').insert({company_id:currentCompany.company_id,project_id:x.project_id,code:x.code,description:x.description,unit:x.unit,quantity:x.quantity,rate:x.rate,budget:x.budget,actual:0,progress:x.progress,planned_progress:Number(x.plannedProgress||0),progress_status:x.progressStatus||'Not Started',progress_notes:x.progressNotes||'',work_value:boqWorkValue(x),created_by:currentUser.id}).select('id').single();if(r.error)throw new Error(`BOQ row ${i+1} (${x.description}): ${r.error.message}`);x.db_id=r.data.id;x.id=r.data.id;}data.boq.push(...parsed);
@@ -762,6 +763,7 @@ async function add(t){
       progressNotes:''
     };
     item.budget=boqAmount(item);
+    item.progressStatus=deriveProgressStatus(item);
 
     if(cloudReady && currentCompany){
       if(!item.project_id){
@@ -915,7 +917,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=15');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=16');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');
@@ -1038,7 +1040,7 @@ async function loadCloudWorkspace(){
     actual:Number(x.actual||0),
     progress:Number(x.progress||0),
     plannedProgress:Number(x.planned_progress||0),
-    progressStatus:x.progress_status||'Not Started',
+    progressStatus:(String(x.progress_status||'').toLowerCase()==='on hold'?'On Hold':(Number(x.progress||0)>=100?'Complete':(Number(x.progress||0)>0?'In Progress':'Not Started'))),
     progressNotes:x.progress_notes||'',
     work_value:Number(x.work_value||0)
   }));
@@ -1053,4 +1055,3 @@ save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing wa
 boot();
 </script>
 </body></html>
-

@@ -105,8 +105,8 @@ for(;l<3;){if(0===o)break e;o--,u+=n[s++]<<l,l+=8}r.lens[A[r.have++]]=7&u,u>>>=3
 
 </script>
 <script>
-const modules=[['projects','🏗️','My Projects'],['dashboard','📊','Company Overview'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
-const emptyWorkspace={projects:[],materialCategories:[],materials:[],materialUsage:[],labour:[],boq:[],procurement:[],variations:[],expenses:[],snags:[],reports:[]};
+const modules=[['projects','🏗️','My Projects'],['dashboard','📊','Company Overview'],['boq','💰','BOQ & Cost'],['materials','🧱','Materials'],['labour','👷','Labour'],['procurement','🛒','Procurement'],['progress','📈','Progress'],['schedule','🗓️','Project Schedule'],['variations','🔄','Variations'],['reports','📝','Reports'],['snags','⚠️','Snagging'],['expenses','💵','Expenses']];
+const emptyWorkspace={projects:[],materialCategories:[],materials:[],materialUsage:[],labour:[],boq:[],procurement:[],variations:[],expenses:[],snags:[],reports:[],schedule:{}};
 let data=structuredClone(emptyWorkspace);let currentProjectId=null;let currentModuleId='dashboard';let currentMaterialCategory='All';let sb=null, currentUser=null, currentCompany=null, authMode='signin', cloudReady=false, cloudLoadError='';
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
 let save=()=>localStorage.setItem('streetwiseDataV2',JSON.stringify(data));
@@ -211,10 +211,11 @@ if(currentProjectId){
  <div class="card metric"><small>Actual Cost</small><div class="num">${money(actual)}</div><div class="note">${adjustedBudget?Math.round(actual/adjustedBudget*100):0}% of adjusted budget</div></div>
  <div class="card metric"><small>Remaining Budget</small><div class="num">${money(remaining)}</div><div class="note ${remaining<0?'warn':'up'}">${remaining<0?'Over adjusted budget':'Available after actual costs'}</div></div>
  <div class="card metric"><small>Physical Progress</small><div class="num">${formatPct(physical)}</div><div class="note">Calculated from BOQ Work Value</div></div>
+ <div class="card metric"><small>Programme Progress</small><div class="num">${formatPct(scheduleStats(scheduleStateForProject(p.db_id||p.id)).planned)}</div><div class="note">${scheduleStateForProject(p.db_id||p.id)?'Microsoft Project guide':'No programme imported'}</div></div>
  <div class="card metric"><small>Approved Variations</small><div class="num">${money(costs.variations)}</div><div class="note">${vars.length} variation record${vars.length===1?'':'s'}</div></div>
  </div>
  <div class="section two">
- <div class="card"><div class="section-head"><h2>Project Progress</h2><button class="btn" onclick="show('progress')">Open Progress</button></div><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:10px"><div><small class="muted">Planned</small><div style="font-size:24px;font-weight:850">${formatPct(projectProgressStats(p.db_id||p.id).planned)}</div></div><div><small class="muted">Actual</small><div style="font-size:24px;font-weight:850">${formatPct(physical)}</div></div><div><small class="muted">Variance</small><div style="font-size:24px;font-weight:850" class="${projectProgressStats(p.db_id||p.id).variance<0?'warn':'up'}">${projectProgressStats(p.db_id||p.id).variance>=0?'+':''}${formatPct(projectProgressStats(p.db_id||p.id).variance)}</div></div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,Math.max(0,physical))}%"></i></div><div class="muted" style="margin-top:8px">Actual Work Value: ${money(stats.work)} · BOQ Budget: ${money(budget)}</div></div>
+ <div class="card"><div class="section-head"><h2>Project Progress</h2><div class="module-tools"><button class="btn" onclick="show('progress')">Open Progress</button><button class="btn" onclick="show('schedule')">Programme</button></div></div><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:10px"><div><small class="muted">Planned</small><div style="font-size:24px;font-weight:850">${formatPct(projectProgressStats(p.db_id||p.id).planned)}</div></div><div><small class="muted">Actual</small><div style="font-size:24px;font-weight:850">${formatPct(physical)}</div></div><div><small class="muted">Variance</small><div style="font-size:24px;font-weight:850" class="${projectProgressStats(p.db_id||p.id).variance<0?'warn':'up'}">${projectProgressStats(p.db_id||p.id).variance>=0?'+':''}${formatPct(projectProgressStats(p.db_id||p.id).variance)}</div></div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,Math.max(0,physical))}%"></i></div><div class="muted" style="margin-top:8px">Actual Work Value: ${money(stats.work)} · BOQ Budget: ${money(budget)}</div></div>
  <div class="card"><div class="section-head"><h2>Cost Breakdown</h2></div><div class="row"><span>Materials</span><strong>${money(costs.materials)}</strong></div><div class="row"><span>Labour</span><strong>${money(costs.labour)}</strong></div><div class="row"><span>Expenses</span><strong>${money(costs.expenses)}</strong></div><div class="row"><span>Approved Variations</span><strong>${money(costs.variations)}</strong></div><div class="row"><span>Adjusted Budget</span><strong>${money(adjustedBudget)}</strong></div></div>
  </div>
  <div class="section two"><div class="card"><div class="section-head"><h2>Open Snags</h2><button class="btn" onclick="show('snags')">Open</button></div>${snags.filter(s=>s.status!=='Closed').slice(0,5).map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.id}</div></div><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></div>`).join('')||'<div class="empty">No open snags.</div>'}</div>
@@ -440,6 +441,105 @@ function progressSection(projectRowsHtml){
   const ps=projectProgressStats(cp.db_id||cp.id);
   return shell('progress',`${projectSelector()}<div class="grid"><div class="card metric"><small>Planned Progress</small><div class="num">${formatPct(ps.planned)}</div><div class="note">Weighted by BOQ value</div></div><div class="card metric"><small>Actual Progress</small><div class="num">${formatPct(ps.actual)}</div><div class="note">Weighted by completed Work Value</div></div><div class="card metric"><small>Progress Variance</small><div class="num ${ps.variance<0?'warn':'up'}">${ps.variance>=0?'+':''}${formatPct(ps.variance)}</div><div class="note">Actual minus planned</div></div><div class="card metric"><small>Work Value</small><div class="num">${money(ps.actualWork)}</div><div class="note">of ${money(ps.budget)} BOQ budget</div></div></div><div class="card" style="margin-top:13px"><div class="section-head"><div><h2>Work Item Progress</h2><div class="muted">Update planned %, actual %, status and notes directly. Changes are saved to the BOQ item.</div></div><button class="btn" onclick="show('boq')">Open BOQ</button></div><div style="overflow:auto"><table><thead><tr><th>Code</th><th>Work Item</th><th>Budget</th><th>Planned %</th><th>Actual %</th><th>Variance</th><th>Status</th><th>Notes</th></tr></thead><tbody>${rows||'<tr><td colspan="8" class="empty">No BOQ items in this project.</td></tr>'}</tbody></table></div></div>`);
 }
+function scheduleStateForProject(pid){
+  const s=data.schedule||{};
+  return s[String(pid)]||null;
+}
+function xmlText(parent,name){
+  if(!parent)return '';
+  const nodes=parent.getElementsByTagNameNS('*',name);
+  return nodes&&nodes[0]?String(nodes[0].textContent||'').trim():'';
+}
+function xmlNum(parent,name){const n=Number(xmlText(parent,name));return Number.isFinite(n)?n:0;}
+function xmlBool(parent,name){const v=xmlText(parent,name).toLowerCase();return v==='1'||v==='true'||v==='yes';}
+function isoDateOnly(v){const m=String(v||'').match(/^(\d{4}-\d{2}-\d{2})/);return m?m[1]:'';}
+function schedulePlannedPercent(task,statusDate){
+  const start=new Date(task.start),finish=new Date(task.finish),status=new Date(statusDate);
+  if(!task.start||!task.finish||!Number.isFinite(start.getTime())||!Number.isFinite(finish.getTime())||!Number.isFinite(status.getTime()))return 0;
+  if(status<=start)return 0;
+  if(status>=finish)return 100;
+  const total=finish-start,elapsed=status-start;
+  return total>0?Math.max(0,Math.min(100,elapsed/total*100)):0;
+}
+function scheduleActualPercent(task){
+  if(!task.boqItemId)return null;
+  const x=data.boq.find(b=>String(b.db_id||b.id)===String(task.boqItemId));
+  return x?Math.max(0,Math.min(100,Number(x.progress||0))):null;
+}
+function scheduleStats(s){
+  const tasks=(s?.tasks||[]).filter(x=>!x.summary);
+  let pw=0,aw=0,tw=0,mapped=0;
+  tasks.forEach(t=>{const w=Math.max(1,Number(t.durationHours||0));const p=Number(t.plannedPercent||0);const a=scheduleActualPercent(t);pw+=p*w;tw+=w;if(a!==null){aw+=a*w;mapped+=1;}});
+  const planned=tw?pw/tw:0,actual=mapped?aw/(tasks.filter(t=>scheduleActualPercent(t)!==null).reduce((a,t)=>a+Math.max(1,Number(t.durationHours||0)),0)):0;
+  return {tasks,planned,actual,variance:actual-planned,mapped,total:tasks.length};
+}
+function scheduleTaskRows(s){
+  if(!s)return '<tr><td colspan="10" class="empty">No Microsoft Project schedule imported for this project.</td></tr>';
+  const boq=projectRows(data.boq);
+  return (s.tasks||[]).map(t=>{
+    const actual=scheduleActualPercent(t),variance=actual===null?null:actual-Number(t.plannedPercent||0);
+    const mapped=t.boqItemId?data.boq.find(x=>String(x.db_id||x.id)===String(t.boqItemId)):null;
+    const options='<option value="">— Not linked —</option>'+boq.map(x=>`<option value="${x.db_id||x.id}" ${mapped&&String(mapped.db_id||mapped.id)===String(x.db_id||x.id)?'selected':''}>${inlineEsc((x.code?x.code+' · ':'')+x.description)}</option>`).join('');
+    return `<tr><td>${inlineEsc(t.wbs||t.outline||'')}</td><td><strong>${inlineEsc(t.name)}</strong>${t.critical?'<div class="muted">Critical</div>':''}</td><td>${inlineEsc(t.start||'')}</td><td>${inlineEsc(t.finish||'')}</td><td>${num(t.durationHours||0)}h</td><td>${formatPct(t.plannedPercent)}</td><td>${actual===null?'—':formatPct(actual)}</td><td class="${variance!==null&&variance<0?'down':variance!==null?'up':''}">${variance===null?'—':(variance>=0?'+':'')+formatPct(variance)}</td><td><select class="btn" onchange="mapScheduleTask('${t.uid}',this.value)" style="max-width:260px">${options}</select></td><td>${t.notes?inlineEsc(t.notes):''}</td></tr>`;
+  }).join('');
+}
+function scheduleSection(){
+  const p=currentProject();
+  if(!p)return shell('schedule',`<div class="card"><div class="section-head"><div><div class="eyebrow">Programme Control</div><h2 style="margin:4px 0">Project Schedule</h2><div class="muted">Select a project to import and control its Microsoft Project programme.</div></div></div><div class="empty">Open a project first.</div></div>`);
+  const s=scheduleStateForProject(p.db_id||p.id),st=scheduleStats(s),taskCount=s?.tasks?.length||0;
+  const critical=s?.tasks?.filter(x=>x.critical).length||0;
+  return shell('schedule',`${projectSelector()}
+  <div class="card" style="margin-bottom:13px"><div class="section-head"><div><div class="eyebrow">Programme Control</div><h2 style="margin:4px 0">${inlineEsc(p.name)}</h2><div class="muted">Microsoft Project programme · ${s?inlineEsc(s.fileName||'Imported XML'): 'No schedule imported'}</div></div><div class="module-tools"><button class="btn" onclick="openModal('scheduleImport')">⇧ Import / Replace XML</button>${s?'<button class="btn" onclick="autoMapScheduleBoq()">⚡ Auto-map BOQ</button>':''}</div></div>
+  ${s?`<div class="grid" style="grid-template-columns:repeat(5,1fr)"><div class="card metric"><small>Programme Planned</small><div class="num">${formatPct(st.planned)}</div><div class="note">As of ${inlineEsc(s.statusDate||'')}</div></div><div class="card metric"><small>Site Actual</small><div class="num">${formatPct(st.actual)}</div><div class="note">${st.mapped} of ${st.total} activities linked</div></div><div class="card metric"><small>Schedule Variance</small><div class="num ${st.variance<0?'down':'up'}">${st.variance>=0?'+':''}${formatPct(st.variance)}</div><div class="note">Actual − programme</div></div><div class="card metric"><small>Activities</small><div class="num">${taskCount}</div><div class="note">${critical} critical</div></div><div class="card metric"><small>Programme Window</small><div class="num" style="font-size:15px">${inlineEsc(s.projectStart||'')} → ${inlineEsc(s.projectFinish||'')}</div><div class="note">${inlineEsc(s.projectName||'')}</div></div></div>`:''}
+  ${s?`<div class="section two"><div class="card"><div class="section-head"><h2>Schedule Status Date</h2><span class="muted">Change this to recalculate planned progress.</span></div><div class="form"><label>Status date<input type="date" value="${inlineEsc(s.statusDate||'')}" onchange="setScheduleStatusDate(this.value)"></label><div class="muted" style="font-size:11px">The imported XML has its own project current date. Streetwise keeps that date as the initial programme status date so the programme can be compared consistently with the document.</div></div></div><div class="card"><div class="section-head"><h2>Schedule Import</h2></div><div class="row"><span>Last imported</span><strong>${inlineEsc(s.importedAt?new Date(s.importedAt).toLocaleString():'—')}</strong></div><div class="row"><span>Source file</span><strong>${inlineEsc(s.fileName||'—')}</strong></div><div class="row"><span>Dependencies</span><strong>${num((s.dependencies||[]).length)}</strong></div><div class="row"><span>Resources</span><strong>${num((s.resources||[]).length)}</strong></div></div></div>`:''}
+  ${s?`<div class="section"><div class="card"><div class="section-head"><div><h2>Programme Activities</h2><div class="muted">Programme dates come from Microsoft Project. Actual % comes from the linked Streetwise BOQ item.</div></div></div><div style="overflow:auto"><table style="min-width:1200px"><thead><tr><th>WBS</th><th>Activity</th><th>Start</th><th>Finish</th><th>Duration</th><th>Programme %</th><th>Site Actual %</th><th>Variance</th><th>Linked BOQ Item</th><th>Notes</th></tr></thead><tbody>${scheduleTaskRows(s)}</tbody></table></div></div></div>`:'<div class="card empty">Import the Microsoft Project XML to create the programme schedule.</div>'}`);
+}
+function scheduleImportForm(){
+  const p=currentProject();
+  return `<div class="form"><div class="muted">Upload the <strong>Microsoft Project XML</strong> exported from your programme. Streetwise will read activities, WBS, dates, duration, critical path, dependencies and the project current date. It will not change your BOQ, costs or materials.</div><label>Project<select id="scheduleProject">${data.projects.map(x=>`<option value="${x.db_id||x.id}" ${p&&String(p.db_id||p.id)===String(x.db_id||x.id)?'selected':''}>${inlineEsc(x.name)}</option>`).join('')}</select></label><label>Microsoft Project XML<input id="scheduleFile" type="file" accept=".xml,text/xml,application/xml" onchange="handleScheduleFile(this.files[0])"></label><div id="scheduleImportArea"><div class="import-status">Choose an XML file to begin.</div></div></div>`;
+}
+async function handleScheduleFile(file){
+  if(!file)return;
+  const area=document.getElementById('scheduleImportArea');
+  area.innerHTML='<div class="import-status">Reading '+inlineEsc(file.name)+'…</div>';
+  try{
+    const text=await file.text();
+    const doc=new DOMParser().parseFromString(text,'application/xml');
+    if(doc.querySelector('parsererror'))throw new Error('The XML file could not be parsed.');
+    const projectId=document.getElementById('scheduleProject').value;
+    const project=data.projects.find(x=>String(x.db_id||x.id)===String(projectId));
+    if(!project)throw new Error('Select a valid Streetwise project first.');
+    const taskNodes=Array.from(doc.getElementsByTagNameNS('*','Task'));
+    const root=taskNodes.find(x=>xmlNum(x,'UID')===0)||taskNodes[0];
+    const currentDate=isoDateOnly(xmlText(doc.documentElement,'CurrentDate'))||isoDateOnly(xmlText(root,'CurrentDate'))||new Date().toISOString().slice(0,10);
+    const tasks=[];
+    for(const node of taskNodes){
+      const uid=xmlNum(node,'UID');
+      if(!uid)continue;
+      const name=xmlText(node,'Name');
+      const summary=xmlBool(node,'Summary');
+      const start=isoDateOnly(xmlText(node,'Start')),finish=isoDateOnly(xmlText(node,'Finish'));
+      if(!name||summary||!start||!finish)continue;
+      const preds=Array.from(node.getElementsByTagNameNS('*','PredecessorLink')).map(pl=>({uid:xmlNum(pl,'PredecessorUID'),type:xmlNum(pl,'Type'),lag:xmlNum(pl,'LinkLag')})).filter(x=>x.uid);
+      const durationRaw=xmlText(node,'Duration');
+      const durationHours=xmlDurationHours(durationRaw);
+      const t={uid,name,wbs:xmlText(node,'WBS'),outline:xmlText(node,'OutlineNumber'),outlineLevel:xmlNum(node,'OutlineLevel'),start,finish,durationHours,critical:xmlBool(node,'Critical'),slackHours:xmlNum(node,'TotalSlack')/60000,percentComplete:xmlNum(node,'PercentComplete'),physicalPercentComplete:xmlNum(node,'PhysicalPercentComplete'),plannedPercent:0,boqItemId:'',notes:'',predecessors:preds};
+      t.plannedPercent=schedulePlannedPercent(t,currentDate);
+      tasks.push(t);
+    }
+    const dependencies=[];tasks.forEach(t=>t.predecessors.forEach(p=>dependencies.push({taskUid:t.uid,...p})));
+    const resources=Array.from(doc.getElementsByTagNameNS('*','Resource')).filter(x=>xmlNum(x,'UID')>0).map(x=>({uid:xmlNum(x,'UID'),name:xmlText(x,'Name'),type:xmlText(x,'Type')}));
+    const projectName=xmlText(doc.documentElement,'Name')||xmlText(root,'Name')||file.name.replace(/\.xml$/i,'');
+    const rootStart=isoDateOnly(xmlText(root,'Start')),rootFinish=isoDateOnly(xmlText(root,'Finish'));
+    const schedule={projectId:project.db_id||project.id,projectName,fileName:file.name,importedAt:new Date().toISOString(),statusDate:currentDate,projectStart:rootStart||tasks.map(x=>x.start).sort()[0]||'',projectFinish:rootFinish||tasks.map(x=>x.finish).sort().slice(-1)[0]||'',tasks,dependencies,resources};
+    data.schedule=data.schedule||{};data.schedule[String(project.db_id||project.id)]=schedule;
+    currentProjectId=project.db_id||project.id;saveNavigation();save();closeModal();render();show('schedule');toast(`${tasks.length} programme activities imported`);
+  }catch(e){console.error(e);area.innerHTML=`<div class="import-status import-error">Could not read the Project XML: ${inlineEsc(e.message||String(e))}</div>`;}
+}
+function xmlDurationHours(v){const s=String(v||'');let h=0,m=s.match(/(\d+(?:\.\d+)?)H/);if(m)h+=Number(m[1]);m=s.match(/(\d+(?:\.\d+)?)M/);if(m)h+=Number(m[1])/60;const d=s.match(/(\d+(?:\.\d+)?)D/);if(d)h+=Number(d[1])*8;return h;}
+function setScheduleStatusDate(value){const p=currentProject();if(!p)return;const s=scheduleStateForProject(p.db_id||p.id);if(!s)return;s.statusDate=value;for(const t of s.tasks)t.plannedPercent=schedulePlannedPercent(t,value);save();render();show('schedule');toast('Programme planned progress recalculated');}
+async function mapScheduleTask(uid,boqId){const p=currentProject();if(!p)return;const s=scheduleStateForProject(p.db_id||p.id);if(!s)return;const t=s.tasks.find(x=>String(x.uid)===String(uid));if(!t)return;t.boqItemId=boqId||'';save();render();show('schedule');}
+function autoMapScheduleBoq(){const p=currentProject();if(!p)return;const s=scheduleStateForProject(p.db_id||p.id);if(!s)return;const rows=projectRows(data.boq);let count=0;const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();for(const t of s.tasks){if(t.boqItemId)continue;const tn=norm(t.name);let best=null,bestScore=0;for(const b of rows){const bn=norm((b.code?b.code+' ':'')+b.description);if(!bn)continue;const words=[...new Set(tn.split(/\s+/).filter(w=>w.length>3))];const score=words.reduce((a,w)=>a+(bn.includes(w)?1:0),0);if(score>bestScore){bestScore=score;best=b;}}if(best&&bestScore>=2){t.boqItemId=best.db_id||best.id;count++;}}save();render();show('schedule');toast(`${count} schedule activit${count===1?'y':'ies'} auto-mapped`);}
 function render(){
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
 const act=(t,x)=>`<td><div class="module-tools"><button class="btn" onclick="event.stopPropagation();editRecord('${t}','${x.db_id||x.id}')">Edit</button>${t==='progress'?'':`<button class="btn" onclick="event.stopPropagation();deleteRecord('${t}','${x.db_id||x.id}')">Delete</button>`}</div></td>`;
@@ -461,6 +561,7 @@ dashboard(),
 projectsHome(),
 table('boq','BOQ & Cost Control',['Project','Item','Description','Unit','Qty','Rate','Amount','Actual Cost','Cost Variance','Planned %','Actual %','Progress Variance','Work Value','Status','Actions'],b,`${currentProject()?'<button class="btn" onclick="replaceEntireBoq()">↻ Replace Entire BOQ</button>':''}<button class="btn" onclick="openModal('excelImport','boq')">⇧ Import Excel</button><button class="btn primary" onclick="openModal('boq')">+ BOQ Item</button>`),
 materialsSection(m,ms,mu),
+scheduleSection(),
 table('labour','Labour',['Trade','Workers','Daily Rate','Days','Cost','Actions'],l,`<button class="btn primary" onclick="openModal('labour')">+ Labour</button>`),
 table('procurement','Procurement',['Item','Supplier','Quantity','Value','Status','Actions'],q,`${scopedNote}<button class="btn primary" onclick="openModal('procurement')">+ Purchase</button>`),
 progressSection(pr),
@@ -473,7 +574,7 @@ updateProjectContext();
 bindInlineEditors();
 }
 const opts=()=>data.projects.map(p=>`<option>${p.name}</option>`).join('');
-function openModal(t,importType){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',materialUsage:'Record Material Usage',materialCategory:'Add Material Category',excelImport:'Import Excel',report:'New Site Report',snag:'New Snag',expense:'New Expense'};document.getElementById('modalTitle').textContent=titles[t];let h='';
+function openModal(t,importType){let titles={project:'New Project',boq:'New BOQ Item',material:'Add Material',labour:'Add Labour Record',procurement:'New Purchase',progress:'Update Progress',variation:'New Variation',materialUsage:'Record Material Usage',materialCategory:'Add Material Category',excelImport:'Import Excel',report:'New Site Report',snag:'New Snag',expense:'New Expense',scheduleImport:'Import Microsoft Project XML'};document.getElementById('modalTitle').textContent=titles[t];let h='';
 if(t==='project')h=`<div class="form"><label>Project name<input id="f1" placeholder="e.g. Karen Villas"></label><label>Client<input id="f2"></label><label>Location<input id="f3"></label><label>Budget (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Active</option><option>On Hold</option><option>Completed</option></select></label><button class="btn primary" onclick="add('project')">Create Project</button></div>`;
 if(t==='boq')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Item / Code<input id="f2"></label><label>Description<input id="f3"></label><label>Unit<input id="f4" placeholder="m², m³, No."></label><label>Quantity<input id="f5" type="number" step="0.01" min="0"></label><label>Rate (KES)<input id="f6" type="number" step="0.01" min="0"></label><label>Actual % Complete<input id="f7" type="number" step="0.01" min="0" max="100" value="0"></label><div class="muted" style="font-size:11px">Planned progress, status and notes are managed in the Progress module. Amount and Work Value are calculated automatically.</div><button class="btn primary" onclick="add('boq')">Add Item</button></div>`;
 if(t==='material')h=`<div class="form"><label>Date<input id="f1" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Project<select id="f2"><option value="">General / Company Stock</option>${data.projects.map(p=>`<option value="${p.name}" ${currentProject()&&currentProject().name===p.name?'selected':''}>${p.name}</option>`).join('')}</select></label><label>Category<select id="f11">${categoryOptions()}</select></label><label>Material<input id="f3" placeholder="e.g. Cement"></label><label>Unit<input id="f4" placeholder="Bags, Tonnes, m³"></label><label>Qty Received<input id="f5" type="number" step="0.01" min="0"></label><label>Unit Cost (KES)<input id="f6" type="number" step="0.01" min="0"></label><label>Supplier<input id="f8"></label><label>Reorder Level<input id="f9" type="number" step="0.01" min="0" value="0"></label><label>Notes<textarea id="f10" rows="2"></textarea></label><div class="muted" style="font-size:11px">Total Cost is calculated automatically. Stock usage is recorded separately so receipt rows never need to be edited.</div><button class="btn primary" onclick="add('material')">Add Receipt</button></div>`;
@@ -487,6 +588,7 @@ if(t==='report')h=`<div class="form"><label>Project<select id="f1">${opts()}</se
 if(t==='snag')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Priority<select id="f3"><option>High</option><option>Medium</option><option>Low</option></select></label><button class="btn primary" onclick="add('snag')">Add Snag</button></div>`;
 if(t==='expense')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Category<select id="f2"><option>Petty Cash</option><option>Transport</option><option>Site</option><option>Tools</option><option>Other</option></select></label><label>Description<input id="f3"></label><label>Amount (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('expense')">Add Expense</button></div>`;
 if(t==='excelImport')h=excelImportForm(importType||'boq');
+if(t==='scheduleImport')h=scheduleImportForm();
 document.getElementById('modalBody').innerHTML=h;document.getElementById('modal').classList.add('open')}
 
 let excelImportState={type:null,rows:[],headers:[],mapping:{},fileName:'',sheets:[],sheetIndex:0,headerRow:0};
@@ -917,7 +1019,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=16');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=17');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

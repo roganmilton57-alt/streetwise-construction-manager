@@ -223,7 +223,8 @@ if(currentProjectId){
  <div class="card"><div class="section-head"><h2>Project Progress</h2><div class="module-tools"><button class="btn" onclick="show('progress')">Open Progress</button><button class="btn" onclick="show('schedule')">Programme</button></div></div><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:10px"><div><small class="muted">Planned</small><div style="font-size:24px;font-weight:850">${formatPct(projectProgressStats(p.db_id||p.id).planned)}</div></div><div><small class="muted">Actual</small><div style="font-size:24px;font-weight:850">${formatPct(physical)}</div></div><div><small class="muted">Variance</small><div style="font-size:24px;font-weight:850" class="${projectProgressStats(p.db_id||p.id).variance<0?'warn':'up'}">${projectProgressStats(p.db_id||p.id).variance>=0?'+':''}${formatPct(projectProgressStats(p.db_id||p.id).variance)}</div></div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,Math.max(0,physical))}%"></i></div><div class="muted" style="margin-top:8px">Actual Work Value: ${money(stats.work)} · BOQ Budget: ${money(budget)}</div></div>
  <div class="card"><div class="section-head"><h2>Cost Breakdown</h2></div><div class="row"><span>Materials</span><strong>${money(costs.materials)}</strong></div><div class="row"><span>Labour</span><strong>${money(costs.labour)}</strong></div><div class="row"><span>Expenses</span><strong>${money(costs.expenses)}</strong></div><div class="row"><span>Approved Variations</span><strong>${money(costs.variations)}</strong></div><div class="row"><span>Adjusted Budget</span><strong>${money(adjustedBudget)}</strong></div></div>
  </div>
- <div class="section two"><div class="card"><div class="section-head"><h2>Open Snags</h2><button class="btn" onclick="show('snags')">Open</button></div>${snags.filter(s=>s.status!=='Closed').slice(0,5).map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.id}</div></div><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></div>`).join('')||'<div class="empty">No open snags.</div>'}</div>
+ <div class="card" style="margin-bottom:13px"><div class="section-head"><div><div class="eyebrow">Management Control</div><h2 style="margin:4px 0">Project Health</h2><div class="muted">Combined view of programme, cost, materials, procurement and site quality controls.</div></div><div style="text-align:right"><div style="font-size:28px;font-weight:900" class="${(()=>{const h=projectHealth(p.db_id||p.id);return h.rating==='RED'?'down':h.rating==='AMBER'?'warn':'up'})()}">${(()=>{const h=projectHealth(p.db_id||p.id);return h.score})()}/100</div><span class="pill ${(()=>{const h=projectHealth(p.db_id||p.id);return h.rating==='RED'?'red':h.rating==='AMBER'?'orange':'green'})()}">${(()=>projectHealth(p.db_id||p.id).label)()}</span></div></div><div class="grid" style="grid-template-columns:repeat(4,1fr);gap:10px"><div><small class="muted">Programme</small><div style="font-size:20px;font-weight:850">${(()=>{const h=projectHealth(p.db_id||p.id);return h.programmeVariance===null?'—':(h.programmeVariance>=0?'+':'')+formatPct(h.programmeVariance)})()}</div></div><div><small class="muted">CPI</small><div style="font-size:20px;font-weight:850">${(()=>{const h=projectHealth(p.db_id||p.id);return h.cpi===null?'—':h.cpi.toFixed(2)})()}</div></div><div><small class="muted">Open Snags</small><div style="font-size:20px;font-weight:850">${(()=>projectHealth(p.db_id||p.id).openSnags)()}</div></div><div><small class="muted">Stock Alerts</small><div style="font-size:20px;font-weight:850">${(()=>projectHealth(p.db_id||p.id).stockAlerts)()}</div></div></div><div style="margin-top:12px"><strong>Control reasons</strong>${(()=>projectHealth(p.db_id||p.id).reasons.map(r=>`<div class="row" style="padding:7px 0"><span>• ${inlineEsc(r)}</span></div>`).join(''))()}</div></div>
+<div class="section two"><div class="card"><div class="section-head"><h2>Open Snags</h2><button class="btn" onclick="show('snags')">Open</button></div>${snags.filter(s=>s.status!=='Closed').slice(0,5).map(x=>`<div class="row"><div><strong>${x.item}</strong><div class="muted">${x.id}</div></div><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></div>`).join('')||'<div class="empty">No open snags.</div>'}</div>
  <div class="card"><div class="section-head"><h2>Recent Expenses</h2><button class="btn" onclick="show('expenses')">Open</button></div>${exps.slice(0,5).map(x=>`<div class="row"><div><strong>${x.description}</strong><div class="muted">${x.date} · ${x.category}</div></div><strong>${money(x.amount)}</strong></div>`).join('')||'<div class="empty">No expenses.</div>'}</div></div>`)
 }
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;let materialSummaries=materialSummaryRows();let budget=visibleProjects.reduce((a,p)=>a+projectBoqStats(p.db_id||p.id).budget,0),spent=visibleProjects.reduce((a,p)=>a+projectActualCost(p.db_id||p.id),0),alerts=materialSummaries.filter(m=>m.reorder>0&&m.balance<=m.reorder).length,open=projectRows(data.snags).filter(s=>s.status!=='Closed').length;return shell('dashboard',`${projectSelector()}
@@ -337,6 +338,42 @@ function projectLabourCost(pid){
   return projectRows(data.labour||[]).filter(x=>String(x.project_id||'')===String(pid)||String(x.project||'')===String(currentProject()?.name||''))
     .reduce((a,x)=>a+Number(x.workers||0)*Number(x.rate||0)*Number(x.days||0),0);
 }
+
+function projectHealth(pid){
+  const project=data.projects.find(x=>String(x.db_id||x.id)===String(pid));
+  const s=scheduleStateForProject(pid);
+  const ss=scheduleStats(s);
+  const cc=scheduleCostControl(s,pid);
+  const boq=projectBoqStats(pid);
+  const snags=projectRows(data.snags||[]).filter(x=>x.status!=='Closed').length;
+  const materials=materialSummaryRows().filter(x=>String(x.project||'')===String(project?.name||''));
+  const stockAlerts=materials.filter(x=>Number(x.reorder||0)>0&&Number(x.balance||0)<=Number(x.reorder||0)).length;
+  const procurement=projectRows(data.procurement||[]);
+  const pendingProcurement=procurement.filter(x=>!['Delivered','Complete','Completed'].includes(String(x.status||''))).length;
+  let score=100,reasons=[];
+  if(s){
+    if(ss.variance < -15){score-=30;reasons.push(`Programme is ${formatPct(Math.abs(ss.variance))} behind planned progress`);}
+    else if(ss.variance < -5){score-=15;reasons.push(`Programme is ${formatPct(Math.abs(ss.variance))} behind planned progress`);}
+    if(ss.criticalLate>0){score-=20;reasons.push(`${ss.criticalLate} critical activit${ss.criticalLate===1?'y':'ies'} late`);}
+    else if(ss.late>0){score-=10;reasons.push(`${ss.late} programme activit${ss.late===1?'y':'ies'} late`);}
+  }
+  if(cc.cpi!==null){
+    if(cc.cpi<0.85){score-=25;reasons.push(`Cost efficiency is low (CPI ${cc.cpi.toFixed(2)})`);}
+    else if(cc.cpi<0.95){score-=12;reasons.push(`Cost efficiency is below target (CPI ${cc.cpi.toFixed(2)})`);}
+  }
+  if(snags>=10){score-=15;reasons.push(`${snags} open snags`);}
+  else if(snags>=5){score-=8;reasons.push(`${snags} open snags`);}
+  if(stockAlerts>=5){score-=10;reasons.push(`${stockAlerts} material reorder alerts`);}
+  else if(stockAlerts>0){score-=5;reasons.push(`${stockAlerts} material reorder alert${stockAlerts===1?'':'s'}`);}
+  if(pendingProcurement>=5){score-=8;reasons.push(`${pendingProcurement} procurement items pending`);}
+  else if(pendingProcurement>0){score-=3;reasons.push(`${pendingProcurement} procurement item${pendingProcurement===1?'':'s'} pending`);}
+  score=Math.max(0,Math.min(100,score));
+  const rating=score>=80?'GREEN':score>=60?'AMBER':'RED';
+  const label=rating==='GREEN'?'Healthy':rating==='AMBER'?'Needs Attention':'Critical';
+  if(!reasons.length) reasons.push('No major control exceptions detected');
+  return {score,rating,label,reasons,openSnags:snags,stockAlerts,pendingProcurement,programmeVariance:ss.variance,cpi:cc.cpi,physical:boq.progress};
+}
+
 function projectExpenseCost(pid){
   return projectRows(data.expenses||[]).filter(x=>String(x.project_id||'')===String(pid)||String(x.project||'')===String(currentProject()?.name||''))
     .reduce((a,x)=>a+Number(x.amount||0),0);

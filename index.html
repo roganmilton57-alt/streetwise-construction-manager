@@ -232,7 +232,7 @@ let visibleProjects=currentProject()?projectRows(data.projects):data.projects;le
 <div class="card metric"><small>Active Projects</small><div class="num">${data.projects.filter(p=>p.status==='Active').length}</div><div class="note up">● ${data.projects.length} total projects</div></div>
 <div class="card metric"><small>Portfolio Budget</small><div class="num">${money(budget)}</div><div class="note">${budget?Math.round(spent/budget*100):0}% committed/spent</div></div>
 <div class="card metric"><small>Stock Alerts</small><div class="num">${alerts}</div><div class="note ${alerts?'warn':'up'}">${alerts?'Reorder required':'Stock within levels'}</div></div>
-<div class="card metric"><small>Open Instructions / RFIs</small><div class="num">${projectRows(data.instructions||[]).filter(i=>!['Closed','Cancelled'].includes(i.status)).length}</div><div class="note">${projectRows(data.instructions||[]).filter(i=>instructionStatus(i)==='Overdue').length} overdue</div></div><div class="card metric"><small>Open Snags</small><div class="num">${open}</div><div class="note ${open?'warn':'up'}">${open?'Items require action':'No open snags'}</div></div>
+<div class="card metric"><small>Open Snags</small><div class="num">${open}</div><div class="note ${open?'warn':'up'}">${open?'Items require action':'No open snags'}</div></div>
 </div>
 <div class="section two">
 <div class="card"><div class="section-head"><h2>Project Control</h2><button class="btn" onclick="show('projects')">View all</button></div>
@@ -671,7 +671,7 @@ let mu=materialRowsByCategory(projectRows(data.materialUsage||[])).sort((a,b)=>S
 let l=projectRows(data.labour).map(x=>`<tr><td><strong>${x.trade}</strong></td><td>${x.workers}</td><td>${money(x.rate)}</td><td>${x.days}</td><td>${money(x.workers*x.rate*x.days)}</td>${act('labour',x)}</tr>`).join('');
 let q=projectRows(data.procurement).map(x=>`<tr><td><strong>${x.item}</strong></td><td>${x.supplier}</td><td>${x.qty}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Delivered'?'green':x.status==='Pending'?'red':'orange'}">${x.status}</span></td>${act('procurement',x)}</tr>`).join('');
 let pr=visibleProjects.map(x=>{const s=projectProgressStats(x.db_id||x.id);return `<tr><td><strong>${x.name}</strong></td><td>${formatPct(s.planned)}</td><td>${formatPct(s.actual)}</td><td class="${s.variance<0?'down':'up'}">${s.variance>=0?'+':''}${formatPct(s.variance)}</td><td>${money(s.budget)}</td><td><button class="btn" onclick="event.stopPropagation();openProject('${x.db_id||x.id}');show('progress')">Track Progress</button></td></tr>`}).join('');
-let v=projectRows(data.variations).map(x=>`<tr><td>${x.ref}</td><td>${x.project}</td><td><strong>${inlineEsc(x.description||'')}</strong><div class="muted">Source: ${inlineEsc(variationSourceLabel(x))}</div></td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Approved'?'green':'orange'}">${x.status}</span></td>${act('variation',x)}</tr>`).join('');
+let v=projectRows(data.variations).map(x=>`<tr><td>${x.ref}</td><td>${x.project}</td><td>${x.description}</td><td>${money(x.value)}</td><td><span class="pill ${x.status==='Approved'?'green':'orange'}">${x.status}</span></td>${act('variation',x)}</tr>`).join('');
 let r=projectRows(data.reports).map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.type}</td><td>${x.author}</td><td><span class="pill green">${x.status}</span></td>${act('report',x)}</tr>`).join('');
 let sn=projectRows(data.snags).map(x=>`<tr><td>${x.id}</td><td>${x.project}</td><td>${x.item}</td><td><span class="pill ${x.priority==='High'?'red':x.priority==='Medium'?'orange':'green'}">${x.priority}</span></td><td>${x.status}</td>${act('snag',x)}</tr>`).join('');
 let e=projectRows(data.expenses).map(x=>`<tr><td>${x.date}</td><td>${x.project}</td><td>${x.category}</td><td>${x.description}</td><td><strong>${money(x.amount)}</strong></td>${act('expense',x)}</tr>`).join('');
@@ -705,7 +705,7 @@ if(t==='materialUsage')h=`<div class="form"><label>Date<input id="u1" type="date
 if(t==='labour')h=`<div class="form"><label>Trade<input id="f1"></label><label>Workers<input id="f2" type="number"></label><label>Daily rate (KES)<input id="f3" type="number"></label><label>Days<input id="f4" type="number"></label><button class="btn primary" onclick="add('labour')">Add Record</button></div>`;
 if(t==='procurement')h=`<div class="form"><label>Item<input id="f1"></label><label>Supplier<input id="f2"></label><label>Quantity<input id="f3"></label><label>Value (KES)<input id="f4" type="number"></label><label>Status<select id="f5"><option>Pending</option><option>Ordered</option><option>Delivered</option></select></label><button class="btn primary" onclick="add('procurement')">Add Purchase</button></div>`;
 if(t==='progress')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><div class="muted">Overall physical progress is calculated automatically from BOQ Work Value. Use the Progress module for planned vs actual programme percentages.</div><button class="btn" onclick="closeModal();show('boq')">Open BOQ</button></div>`;
-if(t==='variation')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Value (KES)<input id="f3" type="number"></label><label>Status<select id="f4"><option>Submitted</option><option>Approved</option><option>Rejected</option></select></label><label>Source Instruction / RFI<select id="f5"><option value="">— Not linked —</option>${projectRows(data.instructions||[]).map(i=>`<option value="${inlineEsc(i.id||'')}">${inlineEsc((i.ref||'Instruction')+' · '+(i.subject||''))}</option>`).join('')}</select></label><button class="btn primary" onclick="add('variation')">Add Variation</button></div>`;
+if(t==='variation')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Value (KES)<input id="f3" type="number"></label><label>Status<select id="f4"><option>Submitted</option><option>Approved</option><option>Rejected</option></select></label><button class="btn primary" onclick="add('variation')">Add Variation</button></div>`;
 if(t==='report')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Type<select id="f2"><option>Daily Site Report</option><option>Weekly Progress</option><option>Inspection Report</option><option>Meeting Minutes</option></select></label><label>Author<input id="f3" value="Site Team"></label><button class="btn primary" onclick="add('report')">Create Report</button></div>`;
 if(t==='siteDiary')h=`<div class="form"><label>Date<input id="d1" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Project<select id="d2">${opts()}</select></label><label>Weather<select id="d3"><option>Sunny</option><option>Cloudy</option><option>Rain</option><option>Heavy Rain</option><option>Not Recorded</option></select></label><label>Site Attendance / Labour<input id="d4" placeholder="e.g. 24 workers on site"></label><label>Activities / Work Done<textarea id="d5" rows="3" placeholder="Work carried out today"></textarea></label><label>Materials / Deliveries<textarea id="d6" rows="2" placeholder="Materials received or used"></textarea></label><label>Instructions / Issues<textarea id="d7" rows="2" placeholder="Instructions, delays, issues or constraints"></textarea></label><label>Visitors / Inspections<textarea id="d8" rows="2"></textarea></label><label>Next Day / Follow-up<textarea id="d9" rows="2"></textarea></label><label>Recorded By<input id="d10" value="Site Team"></label><button class="btn primary" onclick="addSiteDiary()">Save Daily Diary</button></div>`;
 if(t==='instruction')h=`<div class="form"><label>Type<select id="i1"><option>Site Instruction</option><option>RFI</option><option>Consultant Instruction</option><option>Client Instruction</option><option>Request for Approval</option></select></label><label>Project<select id="i2">${opts()}</select></label><label>Reference No.<input id="i3" placeholder="e.g. SI-001 / RFI-001"></label><label>Date<input id="i4" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Subject<input id="i5"></label><label>Description / Question<textarea id="i6" rows="3"></textarea></label><label>Issued By / From<input id="i7"></label><label>Responsible Party<input id="i8"></label><label>Due Date<input id="i9" type="date"></label><label>Status<select id="i10"><option>Open</option><option>Pending Response</option><option>Responded</option><option>Closed</option><option>Cancelled</option></select></label><label>Response / Action Taken<textarea id="i11" rows="3"></textarea></label><label>Notes<textarea id="i12" rows="2"></textarea></label><button class="btn primary" onclick="addInstruction()">Save Record</button></div>`;
@@ -815,7 +815,7 @@ function editRecord(t,id){
   if(t==='labour'){set('f1',x.trade);set('f2',x.workers);set('f3',x.rate);set('f4',x.days);}
   if(t==='procurement'){set('f1',x.item);set('f2',x.supplier);set('f3',x.qty);set('f4',x.value);set('f5',x.status);}
   if(t==='progress'){set('f1',x.name);set('f2',x.progress);set('f3',x.spent);}
-  if(t==='variation'){set('f1',x.project);set('f2',x.description);set('f3',x.value);set('f4',x.status);set('f5',x.sourceInstructionId||'');}
+  if(t==='variation'){set('f1',x.project);set('f2',x.description);set('f3',x.value);set('f4',x.status);}
   if(t==='report'){set('f1',x.project);set('f2',x.type);set('f3',x.author);}
   if(t==='snag'){set('f1',x.project);set('f2',x.item);set('f3',x.priority);}
   if(t==='expense'){set('f1',x.project);set('f2',x.category);set('f3',x.description);set('f4',x.amount);}
@@ -838,7 +838,7 @@ async function updateRecord(t,id){
   if(t==='labour'){x.trade=v('f1');x.workers=+v('f2');x.rate=+v('f3');x.days=+v('f4');}
   if(t==='procurement'){x.item=v('f1');x.supplier=v('f2');x.qty=v('f3');x.value=+v('f4');x.status=v('f5');}
   if(t==='progress'){x.progress=+v('f2');x.spent=+v('f3');}
-  if(t==='variation'){x.project=v('f1');x.description=v('f2');x.value=+v('f3');x.status=v('f4');x.sourceInstructionId=v('f5')||'';x.sourceInstructionRef=instructionById(x.sourceInstructionId)?.ref||'';}
+  if(t==='variation'){x.project=v('f1');x.description=v('f2');x.value=+v('f3');x.status=v('f4');}
   if(t==='report'){x.project=v('f1');x.type=v('f2');x.author=v('f3');}
   if(t==='snag'){x.project=v('f1');x.item=v('f2');x.priority=v('f3');}
   if(t==='expense'){x.project=v('f1');x.category=v('f2');x.description=v('f3');x.amount=+v('f4');}
@@ -1091,21 +1091,13 @@ async function add(t){
 
   if(t==='progress'){ closeModal(); show('progress'); return; }
 
-  if(t==='variation'){
-    const sourceId=v('f5')||'';
-    const source=instructionById(sourceId);
-    data.variations.push({
-      ref:'VO-'+String(data.variations.length+1).padStart(3,'0'),
-      project:v('f1'),
-      project_id:data.projects.find(p=>p.name===v('f1'))?.db_id||data.projects.find(p=>p.name===v('f1'))?.id||null,
-      description:v('f2'),
-      value:+v('f3'),
-      status:v('f4'),
-      sourceInstructionId:sourceId,
-      sourceInstructionRef:source?.ref||''
-    });
-    if(source){source.variationCreated=true;source.linkedVariationRef='VO-'+String(data.variations.length).padStart(3,'0');}
-  }
+  if(t==='variation')data.variations.push({
+    ref:'VO-'+String(data.variations.length+1).padStart(3,'0'),
+    project:v('f1'),
+    description:v('f2'),
+    value:+v('f3'),
+    status:v('f4')
+  });
 
   if(t==='siteDiary'){addSiteDiary();return;}
 
@@ -1150,10 +1142,6 @@ function printProjectReport(pid){
   if(!p){toast('Select a project first');return;}
   const stats=projectBoqStats(pid), costs=projectCostBreakdown(pid), s=scheduleStateForProject(pid);
   const es=scheduleEarnedStats(s), cc=scheduleCostControl(s,pid), health=projectHealth(pid), ps=projectProgressStats(pid);
-  const projectInstructions=(data.instructions||[]).filter(x=>String(x.project_id||'')===String(pid)||String(x.project||'')===String(p.name));
-  const openInstructions=projectInstructions.filter(x=>!['Closed','Cancelled'].includes(x.status));
-  const overdueInstructions=projectInstructions.filter(x=>instructionStatus(x)==='Overdue');
-  const projectVariations=(data.variations||[]).filter(x=>String(x.project_id||'')===String(pid)||String(x.project||'')===String(p.name));
   const openSnags=(data.snags||[]).filter(x=>(String(x.project_id||'')===String(pid)||String(x.project||'')===String(p.name))&&x.status!=='Closed');
   const alerts=(data.materials||[]).filter(x=>(String(x.project_id||'')===String(pid)||String(x.project||'')===String(p.name))).filter(x=>Number(x.reorder||0)>0&&Number(x.stock??materialBalance(x))<=Number(x.reorder||0));
   const delays=s?((s.tasks||[]).filter(t=>!t.summary).map(t=>({t,c:scheduleActivityControl(t,s)})).filter(x=>x.c.state==='Late'||x.c.state==='Behind').slice(0,12)):[];
@@ -1169,8 +1157,6 @@ function printProjectReport(pid){
   <h2>Cost Control</h2><table><tr><th>Measure</th><th>Value</th></tr><tr><td>Materials</td><td>${money(costs.materials)}</td></tr><tr><td>Labour</td><td>${money(costs.labour)}</td></tr><tr><td>Expenses</td><td>${money(costs.expenses)}</td></tr><tr><td>Approved Variations</td><td>${money(costs.variations)}</td></tr><tr><td>Adjusted Budget</td><td>${money(cc.adjustedBudget)}</td></tr><tr><td>Earned Value</td><td>${money(cc.ev)}</td></tr><tr><td>Cost Variance</td><td>${money(cc.cv)}</td></tr><tr><td>Forecast Cost at Completion</td><td>${cc.eac===null?'—':money(cc.eac)}</td></tr><tr><td>Variance at Completion</td><td>${cc.vac===null?'—':money(cc.vac)}</td></tr></table>
   <h2>Programme Control</h2><table><tr><th>Measure</th><th>Value</th></tr><tr><td>Schedule Status Date</td><td>${esc(s?.statusDate||'No programme imported')}</td></tr><tr><td>Activities</td><td>${s?(s.tasks||[]).filter(t=>!t.summary).length:'—'}</td></tr><tr><td>Activities Behind / Late</td><td>${s?(scheduleStats(s).behind+scheduleStats(s).late):'—'}</td></tr><tr><td>Critical Late</td><td>${s?scheduleStats(s).criticalLate:'—'}</td></tr><tr><td>Programme Start</td><td>${esc(s?.projectStart||'—')}</td></tr><tr><td>Programme Finish</td><td>${esc(s?.projectFinish||'—')}</td></tr></table>
   <h2>Delayed / At-Risk Activities</h2><table><tr><th>WBS</th><th>Activity</th><th>Status</th><th>Variance</th></tr>${rows(delays,[x=>x.t.wbs||'',x=>x.t.name,x=>x.c.state,x=>x.c.variance===null?'—':formatPct(x.c.variance)])}</table>
-  <h2>Site Instructions & RFIs</h2><table><tr><th>Reference</th><th>Type</th><th>Subject</th><th>Due Date</th><th>Status</th><th>Linked Variation</th></tr>${rows(openInstructions,[x=>x.ref,x=>x.type,x=>x.subject,x=>x.dueDate,x=>instructionStatus(x),x=>linkedVariationsForInstruction(x.id).map(v=>v.ref).join(', ')||'—'])}</table>
-  <div class="metric"><b>${openInstructions.length}</b> open instruction / RFI record(s), including <b>${overdueInstructions.length}</b> overdue. ${projectVariations.filter(v=>v.sourceInstructionId).length} variation(s) linked to instructions/RFIs.</div>
   <h2>Open Snags</h2><table><tr><th>ID</th><th>Item</th><th>Priority</th><th>Status</th></tr>${rows(openSnags,[x=>x.id,x=>x.item,x=>x.priority,x=>x.status])}</table>
   <h2>Material Alerts</h2><table><tr><th>Material</th><th>Unit</th><th>Balance</th><th>Reorder Level</th></tr>${rows(alerts,[x=>x.name,x=>x.unit,x=>num(x.stock??materialBalance(x)),x=>num(x.reorder)])}</table>
   <div class="footer muted">Prepared by Streetwise Construction Manager. This report reflects the project data currently stored in the system at the time of generation.</div></body></html>`;
@@ -1187,25 +1173,6 @@ function siteDiarySection(){
   const rows=projectRows(data.siteDiary||[]).sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>`<tr><td>${inlineEsc(x.date||'')}</td><td><strong>${inlineEsc(x.project||'')}</strong></td><td>${inlineEsc(x.weather||'')}</td><td>${inlineEsc(x.attendance||'')}</td><td style="min-width:260px">${inlineEsc(x.activities||'')}</td><td>${inlineEsc(x.materials||'')}</td><td>${inlineEsc(x.issues||'')}</td><td>${inlineEsc(x.recordedBy||'')}</td><td><button class="btn" onclick="printDailyDiary('${x.id}')">🖨️ Print</button></td></tr>`).join('');
   return table('diary','Daily Site Diary',['Date','Project','Weather','Attendance','Activities / Work Done','Materials / Deliveries','Instructions / Issues','Recorded By','Actions'],rows,`<button class="btn primary" onclick="openModal('siteDiary')">+ Daily Diary</button>`);
 }
-function instructionById(id){return (data.instructions||[]).find(x=>String(x.id)===String(id));}
-function linkedVariationsForInstruction(id){return (data.variations||[]).filter(x=>String(x.sourceInstructionId||'')===String(id));}
-function openVariationFromInstruction(id){
-  const x=instructionById(id); if(!x){toast('Instruction / RFI not found');return;}
-  openModal('variation');
-  const set=(n,val)=>{const e=document.getElementById(n);if(e)e.value=val??''};
-  set('f1',x.project||'');
-  set('f2',`${x.ref||''} - ${x.subject||''}`.trim());
-  set('f3','0');
-  set('f4','Submitted');
-  set('f5',x.id||'');
-  const src=document.getElementById('f5'); if(src) src.dataset.sourceInstructionId=x.id||'';
-  const title=document.getElementById('modalTitle'); if(title) title.textContent='New Variation from '+(x.ref||'Instruction / RFI');
-  const btn=document.querySelector('#modalBody button.btn.primary'); if(btn){btn.textContent='Create Variation';btn.onclick=()=>add('variation');}
-}
-function variationSourceLabel(x){
-  const id=x.sourceInstructionId; if(!id)return '—';
-  const i=instructionById(id); return i?`${i.ref||'Instruction'}${i.subject?' · '+i.subject:''}`:(x.sourceInstructionRef||id);
-}
 function addInstruction(){
   const p=data.projects.find(x=>x.name===v('i2'));
   const rec={id:'IR-'+Date.now(),type:v('i1'),project:v('i2'),project_id:p?.db_id||p?.id||null,ref:v('i3')||('IR-'+String((data.instructions||[]).length+1).padStart(3,'0')),date:v('i4'),subject:v('i5'),description:v('i6'),issuedBy:v('i7'),responsible:v('i8'),dueDate:v('i9'),status:v('i10'),response:v('i11'),notes:v('i12')};
@@ -1221,8 +1188,8 @@ function instructionsSection(){
   const list=projectRows(data.instructions||[]).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   const open=list.filter(x=>!['Closed','Cancelled'].includes(x.status)).length;
   const overdue=list.filter(x=>instructionStatus(x)==='Overdue').length;
-  const rows=list.map(x=>{const st=instructionStatus(x), linked=linkedVariationsForInstruction(x.id);return `<tr><td>${inlineEsc(x.ref||'')}</td><td>${inlineEsc(x.type||'')}</td><td>${inlineEsc(x.date||'')}</td><td><strong>${inlineEsc(x.subject||'')}</strong><div class="muted">${inlineEsc(x.project||'')}</div></td><td>${inlineEsc(x.responsible||'')}</td><td>${inlineEsc(x.dueDate||'')}</td><td><span class="pill ${st==='Overdue'?'red':st==='Closed'?'green':st==='Responded'?'green':'orange'}">${inlineEsc(st)}</span></td><td>${inlineEsc(x.response||'')}${linked.length?`<div class="muted">Variation: ${inlineEsc(linked.map(v=>v.ref).join(', '))}</div>`:''}</td><td><button class="btn" onclick="openVariationFromInstruction('${x.id}')">+ Variation</button> <button class="btn" onclick="printInstruction('${x.id}')">🖨️ Print</button></td></tr>`}).join('');
-  const linkedCount=list.reduce((n,x)=>n+linkedVariationsForInstruction(x.id).length,0); const head=`<div class="kpis" style="margin-bottom:14px"><div class="kpi"><small>Open</small><strong>${open}</strong></div><div class="kpi"><small>Overdue</small><strong class="${overdue?'down':''}">${overdue}</strong></div><div class="kpi"><small>Linked Variations</small><strong>${linkedCount}</strong></div><div class="kpi"><small>Total Records</small><strong>${list.length}</strong></div></div>`;
+  const rows=list.map(x=>{const st=instructionStatus(x);return `<tr><td>${inlineEsc(x.ref||'')}</td><td>${inlineEsc(x.type||'')}</td><td>${inlineEsc(x.date||'')}</td><td><strong>${inlineEsc(x.subject||'')}</strong><div class="muted">${inlineEsc(x.project||'')}</div></td><td>${inlineEsc(x.responsible||'')}</td><td>${inlineEsc(x.dueDate||'')}</td><td><span class="pill ${st==='Overdue'?'red':st==='Closed'?'green':st==='Responded'?'green':'orange'}">${inlineEsc(st)}</span></td><td>${inlineEsc(x.response||'')}</td><td><button class="btn" onclick="printInstruction('${x.id}')">🖨️ Print</button></td></tr>`}).join('');
+  const head=`<div class="kpis" style="margin-bottom:14px"><div class="kpi"><small>Open</small><strong>${open}</strong></div><div class="kpi"><small>Overdue</small><strong class="${overdue?'down':''}">${overdue}</strong></div><div class="kpi"><small>Total Records</small><strong>${list.length}</strong></div></div>`;
   return `<section class="module-card" id="module-instructions"><div class="section-head"><div><h2>Site Instructions & RFIs</h2><p class="muted">Track instructions, RFIs, approvals, responses, responsible parties and due dates for the selected project.</p></div><div class="module-tools"><button class="btn primary" onclick="openModal('instruction')">+ New Instruction / RFI</button></div></div>${head}<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Type</th><th>Date</th><th>Subject / Project</th><th>Responsible</th><th>Due Date</th><th>Status</th><th>Response / Action</th><th>Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="9" class="muted">No site instructions or RFIs recorded for this project.</td></tr>`}</tbody></table></div></section>`;
 }
 function printInstruction(id){
@@ -1244,7 +1211,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=27');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=25');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

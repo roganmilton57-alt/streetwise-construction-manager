@@ -38,6 +38,14 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
 .inline-help{font-size:11px;color:var(--muted);margin-top:5px}.import-preview{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:10px}.import-preview table{min-width:760px}.import-map{display:grid;grid-template-columns:1fr 1fr;gap:9px}.import-map label{display:grid;gap:5px;font-size:11px;font-weight:800;color:var(--muted)}.import-status{padding:9px 11px;border-radius:8px;background:#f3f6f8;font-size:11px;margin-top:8px}.import-ok{background:#e8f5ee;color:#176b45}.import-warn{background:#fff5df;color:#8a5b00}.import-error{background:#fae9e9;color:#9b3333}@media(max-width:650px){.import-map{grid-template-columns:1fr}}
 
 .schedule-kpi{border:1px solid var(--line);border-radius:9px;padding:10px;background:#fff}.schedule-kpi .big{font-size:22px;font-weight:850}.schedule-late{background:#fff5f5}.schedule-risk{background:#fffaf0}.schedule-complete{background:#f2faf6}.schedule-baseline{font-size:10px;color:var(--muted)}
+
+.nav button.nav-group{margin-top:9px;border-top:1px solid rgba(255,255,255,.12);border-radius:9px 9px 0 0;padding-top:13px;color:#fff;font-weight:800}
+.nav button.nav-group.active{background:rgba(255,255,255,.08)}
+.nav .group-chevron{font-size:15px;color:#a9bdcb}
+.nav-children{display:none;padding:2px 0 5px 10px;border-left:1px solid rgba(255,255,255,.16);margin-left:20px}
+.nav-children.open{display:block}
+.nav button.nav-child{font-size:12px;padding:9px 8px;gap:7px;margin:1px 0}
+.nav button.nav-child .ico{width:18px;font-size:14px}
 </style>
 </head>
 <body>
@@ -113,13 +121,37 @@ function restoreNavigation(){try{const n=JSON.parse(localStorage.getItem('street
 window.addEventListener('pagehide',saveNavigation);
 window.addEventListener('beforeunload',saveNavigation);
 function toast(t){let e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
-function nav(){let side=document.getElementById('nav'),mobile=document.getElementById('mobilebar');side.innerHTML=modules.map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span class="ico">${x[1]}</span>${x[2]}</button>`).join('');mobile.innerHTML=modules.slice(0,5).map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span>${x[1]}</span>${x[2].split(' ')[0]}</button>`).join('')}
+const projectControlIds=['instructions','documents','submittals','quality'];
+function nav(){
+  const side=document.getElementById('nav'),mobile=document.getElementById('mobilebar');
+  const primary=modules.filter(x=>!projectControlIds.includes(x[0]));
+  const projectControls=modules.filter(x=>projectControlIds.includes(x[0]));
+  const groupOpen=projectControls.some(x=>x[0]===currentModuleId);
+  side.innerHTML=primary.map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span class="ico">${x[1]}</span>${x[2]}</button>`).join('')+
+    `<button class="nav-group ${groupOpen?'active':''}" data-group="project-controls" aria-expanded="${groupOpen}" onclick="toggleProjectControls()"><span class="ico">🗂️</span><span style="flex:1">Project Controls</span><span class="group-chevron">${groupOpen?'▾':'▸'}</span></button>`+
+    `<div id="projectControlsChildren" class="nav-children ${groupOpen?'open':''}">${projectControls.map(x=>`<button class="nav-child" data-m="${x[0]}" onclick="show('${x[0]}')"><span class="ico">${x[1]}</span>${x[2]}</button>`).join('')}</div>`;
+  mobile.innerHTML=modules.slice(0,5).map(x=>`<button data-m="${x[0]}" onclick="show('${x[0]}')"><span>${x[1]}</span>${x[2].split(' ')[0]}</button>`).join('');
+}
+function toggleProjectControls(){
+  const box=document.getElementById('projectControlsChildren');
+  const btn=document.querySelector('[data-group="project-controls"]');
+  if(!box||!btn)return;
+  const open=box.classList.toggle('open');
+  btn.classList.toggle('active',open||projectControlIds.includes(currentModuleId));
+  btn.setAttribute('aria-expanded',String(open));
+  const chevron=btn.querySelector('.group-chevron');if(chevron)chevron.textContent=open?'▾':'▸';
+}
 function show(id){
   currentModuleId=id;
   saveNavigation();
   document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));
   document.getElementById('mod-'+id)?.classList.add('active');
   document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('active',x.dataset.m===id));
+  const isProjectControl=projectControlIds.includes(id);
+  const childBox=document.getElementById('projectControlsChildren');
+  const groupButton=document.querySelector('[data-group="project-controls"]');
+  if(childBox&&isProjectControl)childBox.classList.add('open');
+  if(groupButton){groupButton.classList.toggle('active',isProjectControl);groupButton.setAttribute('aria-expanded',String(!!childBox&&childBox.classList.contains('open')));const chevron=groupButton.querySelector('.group-chevron');if(chevron)chevron.textContent=childBox&&childBox.classList.contains('open')?'▾':'▸';}
   let m=modules.find(x=>x[0]===id);
   document.getElementById('title').textContent=m[2];
   const cp=currentProject();
@@ -1341,7 +1373,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=27');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=31');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');
@@ -1479,5 +1511,3 @@ save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing wa
 boot();
 </script>
 </body></html>
-
-  

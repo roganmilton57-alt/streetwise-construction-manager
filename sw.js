@@ -1,5 +1,5 @@
 
-const CACHE = 'streetwise-commercial-v31';
+const CACHE = 'streetwise-commercial-v32';
 
 const ASSETS = [
   './',
@@ -49,14 +49,9 @@ self.addEventListener('fetch', event => {
         }
 
         const copy = response.clone();
-
-        caches.open(CACHE).then(cache => {
-          cache.put(event.request, copy);
-        });
-
+        caches.open(CACHE).then(cache => cache.put(event.request, copy));
         return response;
       });
     })
   );
 });
-

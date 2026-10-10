@@ -1,5 +1,5 @@
 ```javascript
-const CACHE = 'streetwise-commercial-v32';
+const CACHE = 'streetwise-commercial-v33';
 
 const ASSETS = [
   './',

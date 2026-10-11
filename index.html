@@ -695,16 +695,52 @@ function autoMapScheduleBoq(){const p=currentProject();if(!p)return;const s=sche
 function clearScheduleMappings(){const p=currentProject();if(!p)return;const s=scheduleStateForProject(p.db_id||p.id);if(!s)return;const n=(s.tasks||[]).filter(t=>t.boqItemId).length;if(!n){toast('No schedule mappings to clear');return;}if(!confirm(`Clear ${n} schedule-to-BOQ link${n===1?'':'s'} for this project?`))return;for(const t of s.tasks)t.boqItemId='';save();render();show('schedule');toast('Schedule mappings cleared');}
 
 function teamSection(){
-  return shell('team',`<div class="card"><div class="section-head"><h2>Team & User Roles</h2><button class="btn primary" onclick="loadTeamRoles()">↻ Refresh team</button></div><p class="muted">Assign roles to people who are already members of this company workspace. New user invitations are managed separately.</p><div class="schedule-mapbar"><label style="flex:1;min-width:220px">Existing member user ID<input id="teamUserId" placeholder="Paste the member UUID"></label><label style="width:220px">Role<select id="teamRole"><option value="administrator">Administrator</option><option value="project_manager">Project Manager</option><option value="quantity_surveyor">Quantity Surveyor</option><option value="site_engineer">Site Engineer / Clerk of Works</option><option value="storekeeper">Storekeeper</option><option value="read_only">Read Only</option></select></label><button class="btn primary" onclick="saveTeamRole()">Save role</button></div><div id="teamStatus" class="import-status">Run the Version 33 SQL setup in Supabase, then refresh this section.</div><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>Member user ID</th><th>Assigned role</th></tr></thead><tbody id="teamRows"><tr><td colspan="2" class="empty">No team list loaded.</td></tr></tbody></table></div><div class="import-status import-warn" style="margin-top:12px">Security note: this release adds a protected role registry. Module-by-module write enforcement must be completed against the underlying data model before roles are treated as full data-access restrictions.</div></div>`);
+  return shell('team',`<div class="card"><div class="section-head"><div><h2>Company Team Management</h2><p class="muted">Invite staff by email, choose their role, and connect them to your company without copying UUIDs.</p></div><button class="btn" onclick="loadTeamRoles()">↻ Refresh</button></div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
+    <label>Staff member name<input id="inviteName" placeholder="e.g. John Kamau" autocomplete="name"></label>
+    <label>Email address<input id="inviteEmail" type="email" placeholder="john@example.com" autocomplete="email"></label>
+    <label>Company role<select id="inviteRole"><option value="storekeeper">Storekeeper</option><option value="project_manager">Project Manager</option><option value="quantity_surveyor">Quantity Surveyor</option><option value="site_engineer">Site Engineer / Clerk of Works</option><option value="read_only">Read Only</option><option value="administrator">Administrator</option></select></label>
+    <label>Project access<select id="inviteProjectAccess"><option value="all_current">All current company projects</option><option value="assigned_only">Only projects assigned separately</option></select></label>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" onclick="sendCompanyInvitation()">✉ Send Invitation</button><button class="btn" onclick="loadTeamRoles()">Refresh team</button></div>
+  <div id="teamStatus" class="import-status" style="margin-top:12px">Configure the Version 35 invitation SQL and Edge Function in Supabase before sending invitations.</div>
+  <h3 style="margin-top:22px">Team members</h3><div style="overflow:auto"><table><thead><tr><th>Member</th><th>Email / User ID</th><th>Role</th><th>Status</th></tr></thead><tbody id="teamRows"><tr><td colspan="4" class="empty">Click Refresh team to load members.</td></tr></tbody></table></div>
+  <p class="muted" style="margin-top:12px">Invitations are sent through a secured server-side Edge Function. Never place a Supabase service-role key in this HTML or GitHub.</p></div>`);
+}
+async function sendCompanyInvitation(){
+ const status=document.getElementById('teamStatus');
+ const name=document.getElementById('inviteName')?.value.trim();
+ const email=document.getElementById('inviteEmail')?.value.trim().toLowerCase();
+ const role=document.getElementById('inviteRole')?.value;
+ const projectAccess=document.getElementById('inviteProjectAccess')?.value;
+ if(!currentCompany||!currentCompany.company_id){status.textContent='Select your company workspace first.';return;}
+ if(!name){status.textContent='Enter the staff member’s name.';return;}
+ if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){status.textContent='Enter a valid email address.';return;}
+ if(!sb||!currentUser){status.textContent='Please sign in again before inviting a member.';return;}
+ if(role==='administrator'&&!confirm('You are inviting an Administrator with broad company access. Continue?'))return;
+ status.textContent='Sending invitation…';
+ try{
+   const sessionResult=await sb.auth.getSession();const token=sessionResult?.data?.session?.access_token;
+   if(!token)throw new Error('Your session has expired. Sign in again.');
+   const c=window.STREETWISE_CONFIG||{};
+   const supabaseUrl=String(c.SUPABASE_URL||'').replace(/\/$/,'');
+   const anonKey=c.SUPABASE_PUBLISHABLE_KEY||'';
+   if(!supabaseUrl||!anonKey)throw new Error('Supabase configuration was not found. Check config.js.');
+   const response=await fetch(supabaseUrl+'/functions/v1/streetwise-invite-member',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':anonKey},body:JSON.stringify({company_id:currentCompany.company_id,name,email,role,project_access:projectAccess})});
+   const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||result.message||('Invitation failed ('+response.status+').'));
+   status.textContent=result.message||'Invitation request completed. Check the team list and the invitee’s email.';
+   document.getElementById('inviteName').value='';document.getElementById('inviteEmail').value='';await loadTeamRoles();
+ }catch(e){status.textContent='Could not send invitation: '+(e.message||String(e));}
 }
 async function loadTeamRoles(){
- const status=document.getElementById('teamStatus'),body=document.getElementById('teamRows');if(!sb||!currentCompany){if(status)status.textContent='Sign in and select a company workspace first.';return}
- status.textContent='Loading team roles…';const r=await sb.rpc('streetwise_list_company_roles',{p_company_id:currentCompany.company_id});
- if(r.error){status.textContent='Team roles are not ready: '+r.error.message;return}
- const rows=r.data||[];body.innerHTML=rows.length?rows.map(x=>`<tr><td style="font-family:monospace;font-size:11px;word-break:break-all">${inlineEsc(x.user_id||'')}</td><td>${inlineEsc((x.role||'read_only').replaceAll('_',' '))}</td></tr>`).join(''):`<tr><td colspan="2" class="empty">No roles returned. You may need to bootstrap your own administrator role.</td></tr>`;
- status.textContent=`Loaded ${rows.length} role assignment(s).`;}
-async function saveTeamRole(){
- const userId=document.getElementById('teamUserId')?.value.trim(),role=document.getElementById('teamRole')?.value,status=document.getElementById('teamStatus');if(!userId){status.textContent='Enter the existing member user ID.';return}if(!currentCompany){status.textContent='No company workspace selected.';return}status.textContent='Saving role…';const r=await sb.rpc('streetwise_set_company_role',{p_company_id:currentCompany.company_id,p_user_id:userId,p_role:role});if(r.error){status.textContent='Could not save role: '+r.error.message;return}status.textContent='Role saved.';await loadTeamRoles();toast('Team role updated');}
+ const status=document.getElementById('teamStatus'),body=document.getElementById('teamRows');if(!sb||!currentCompany){if(status)status.textContent='Sign in and select a company workspace first.';return;}
+ status.textContent='Loading company team…';
+ const r=await sb.rpc('streetwise_list_company_team',{p_company_id:currentCompany.company_id});
+ if(r.error){status.textContent='Team list unavailable: '+r.error.message+' — make sure the Version 35 SQL migration has been run.';return;}
+ const rows=r.data||[];body.innerHTML=rows.length?rows.map(x=>`<tr><td>${inlineEsc(x.full_name||'—')}</td><td style="word-break:break-word">${inlineEsc(x.email||x.user_id||'')}</td><td>${inlineEsc((x.role||'read_only').replaceAll('_',' '))}</td><td>${inlineEsc(x.status||'Active')}</td></tr>`).join(''):`<tr><td colspan="4" class="empty">No team members or invitations found yet.</td></tr>`;
+ status.textContent=`Loaded ${rows.length} team record(s).`;
+}
+
 function render(){
 let visibleProjects=currentProject()?projectRows(data.projects):data.projects;
 const act=(t,x)=>`<td><div class="module-tools"><button class="btn" onclick="event.stopPropagation();editRecord('${t}','${x.db_id||x.id}')">Edit</button>${t==='progress'?'':`<button class="btn" onclick="event.stopPropagation();deleteRecord('${t}','${x.db_id||x.id}')">Delete</button>`}</div></td>`;

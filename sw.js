@@ -1,4 +1,4 @@
-const CACHE = 'streetwise-commercial-v33';
+const CACHE = 'streetwise-commercial-v35';
 
 const ASSETS = [
   './',

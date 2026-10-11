@@ -1,5 +1,5 @@
-const CACHE = 'streetwise-commercial-v35';
 
+const CACHE = 'streetwise-commercial-v36';
 const ASSETS = [
   './',
   './index.html',
@@ -9,65 +9,43 @@ const ASSETS = [
   './icon-512.png'
 ];
 
-self.addEventListener('install', function(event) {
+self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
-      .then(function(cache) {
-        return cache.addAll(ASSETS);
-      })
-      .then(function() {
-        return self.skipWaiting();
-      })
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('activate', function(event) {
+self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(function(keys) {
-        return Promise.all(
-          keys.filter(function(key) {
-            return key !== CACHE;
-          }).map(function(key) {
-            return caches.delete(key);
-          })
-        );
-      })
-      .then(function() {
-        return self.clients.claim();
-      })
+      .then(keys => Promise.all(
+        keys
+          .filter(key => key !== CACHE)
+          .map(key => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', function(event) {
-  if (event.request.method !== 'GET') {
-    return;
-  }
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request)
-      .then(function(cached) {
-        if (cached) {
-          return cached;
-        }
+    caches.match(event.request).then(cached => {
+      if (cached) return cached;
 
-        return fetch(event.request).then(function(response) {
-          if (
-            !response ||
-            response.status !== 200 ||
-            response.type === 'opaque'
-          ) {
-            return response;
-          }
+      return fetch(event.request).then(response => {
+        if (!response || response.status !== 200 ||
+            response.type === 'opaque') return response;
 
-          var copy = response.clone();
-
-          caches.open(CACHE).then(function(cache) {
-            cache.put(event.request, copy);
-          });
-
-          return response;
-        });
-      })
+        const copy = response.clone();
+        caches.open(CACHE).then(cache =>
+          cache.put(event.request, copy)
+        );
+        return response;
+      });
+    })
   );
 });

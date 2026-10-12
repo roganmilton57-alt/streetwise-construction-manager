@@ -1,3 +1,4 @@
+```
 <!doctype html>
 <html lang="en">
 <head>
@@ -127,8 +128,12 @@ function toast(t){let e=document.getElementById('toast');e.textContent=t;e.class
 const projectControlIds=['instructions','documents','submittals','quality'];
 function nav(){
   const side=document.getElementById('nav'),mobile=document.getElementById('mobilebar');
-  const allowed=roleModules[currentRole]||roleModules.read_only;
-  const permitted=streetwiseModulesV36.filter(x=>!allowed||allowed.includes(x[0]));
+  const allowed = currentRole === 'administrator'
+    ? null
+    : (roleModules[currentRole] === undefined
+        ? roleModules.read_only
+        : roleModules[currentRole]);
+  const permitted=streetwiseModulesV36.filter(x=>allowed===null||allowed.includes(x[0]));
   const primary=permitted.filter(x=>!projectControlIds.includes(x[0]));
   const projectControls=permitted.filter(x=>projectControlIds.includes(x[0]));
   const groupOpen=projectControls.some(x=>x[0]===currentModuleId);
@@ -147,8 +152,7 @@ function toggleProjectControls(){
   const chevron=btn.querySelector('.group-chevron');if(chevron)chevron.textContent=open?'▾':'▸';
 }
 function show(id){
-  const allowed=roleModules[currentRole]||roleModules.read_only;
-  if(allowed&&!allowed.includes(id)){toast('Your '+String(currentRole).replaceAll('_',' ')+' role does not have access to this module.');return}
+  if(!moduleAllowed(id)){toast('Your '+String(currentRole).replaceAll('_',' ')+' role does not have access to this module.');return}
   currentModuleId=id;
   saveNavigation();
   document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));
@@ -1479,7 +1483,12 @@ async function onSignedIn(user){
   })();
   try{return await authLoadPromise}finally{authLoadPromise=null;}
 }
-function moduleAllowed(id){const a=roleModules[currentRole]||roleModules.read_only;return !a||a.includes(id)}
+function moduleAllowed(id){
+  if(currentRole==='administrator') return true;
+  const allowed=roleModules[currentRole];
+  if(allowed===undefined) return roleModules.read_only.includes(id);
+  return allowed===null || allowed.includes(id);
+}
 async function loadCurrentRole(){currentRole='read_only';if(!sb||!currentUser||!currentCompany)return;try{const r=await sb.rpc('streetwise_list_company_roles',{p_company_id:currentCompany.company_id});if(!r.error&&Array.isArray(r.data)){const row=r.data.find(x=>String(x.user_id)===String(currentUser.id));if(row&&roleModules[row.role]!==undefined)currentRole=row.role;}}catch(e){console.warn('Role lookup failed; using read_only navigation.',e)}nav()}
 async function selectCompanyWorkspace(companyId){const list=window._streetwiseCompanyChoices||[];const chosen=list.find(c=>c.company_id===companyId);if(!chosen)return;currentCompany=chosen;const ok=await loadCloudWorkspace();if(!ok){setAuthStatus(cloudLoadError||'Unable to load this company workspace.');return}await loadCurrentRole();cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();nav();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name+' · '+currentRole.replaceAll('_',' ');window._streetwiseCompanyChoices=null;}
 async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;await loadCurrentRole();document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();nav();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
@@ -1602,3 +1611,4 @@ save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing wa
 boot();
 </script>
 </body></html>
+```

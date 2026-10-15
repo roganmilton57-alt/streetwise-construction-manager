@@ -1559,12 +1559,16 @@ async function loadCloudWorkspace(){
   if(!projects.length){data=structuredClone(emptyWorkspace);data.projects=[];render();return true;}
   let scoped=await sb.from('workspace_project_data').select('project_id,payload').eq('company_id',currentCompany.company_id).in('project_id',projects.map(x=>x.db_id));
   if(scoped.error){cloudLoadError='Project workspace load failed: '+scoped.error.message;return false;}
-  if(admin&&legacyPayload&&!(scoped.data||[]).length){
-    const rows=projects.map(project=>({company_id:currentCompany.company_id,project_id:project.db_id,payload:streetwiseBuildProjectPayload(project,legacyPayload,projects),updated_by:currentUser.id,updated_at:new Date().toISOString()}));
-    const migrated=await sb.from('workspace_project_data').upsert(rows,{onConflict:'company_id,project_id'});
-    if(migrated.error){cloudLoadError='Legacy project data migration failed (original data was preserved): '+migrated.error.message;return false;}
-    scoped=await sb.from('workspace_project_data').select('project_id,payload').eq('company_id',currentCompany.company_id).in('project_id',projects.map(x=>x.db_id));
-    if(scoped.error){cloudLoadError='Project workspace reload failed: '+scoped.error.message;return false;}
+  if(admin&&legacyPayload){
+    const existingIds=new Set((scoped.data||[]).map(row=>String(row.project_id)));
+    const missingProjects=projects.filter(project=>!existingIds.has(String(project.db_id)));
+    if(missingProjects.length){
+      const rows=missingProjects.map(project=>({company_id:currentCompany.company_id,project_id:project.db_id,payload:streetwiseBuildProjectPayload(project,legacyPayload,projects),updated_by:currentUser.id,updated_at:new Date().toISOString()}));
+      const migrated=await sb.from('workspace_project_data').upsert(rows,{onConflict:'company_id,project_id'});
+      if(migrated.error){cloudLoadError='Legacy project data migration failed (original data was preserved): '+migrated.error.message;return false;}
+      scoped=await sb.from('workspace_project_data').select('project_id,payload').eq('company_id',currentCompany.company_id).in('project_id',projects.map(x=>x.db_id));
+      if(scoped.error){cloudLoadError='Project workspace reload failed: '+scoped.error.message;return false;}
+    }
   }
   if(admin&&!legacyPayload){
     const init=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:structuredClone(emptyWorkspace),updated_by:currentUser.id,updated_at:new Date().toISOString()});

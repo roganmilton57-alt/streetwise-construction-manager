@@ -1,4 +1,3 @@
-```
 <!doctype html>
 <html lang="en">
 <head>
@@ -711,22 +710,25 @@ function teamSection(){
     <label>Staff member name<input id="inviteName" placeholder="e.g. John Kamau" autocomplete="name"></label>
     <label>Email address<input id="inviteEmail" type="email" placeholder="john@example.com" autocomplete="email"></label>
     <label>Company role<select id="inviteRole"><option value="storekeeper">Storekeeper</option><option value="project_manager">Project Manager</option><option value="quantity_surveyor">Quantity Surveyor</option><option value="site_engineer">Site Engineer / Clerk of Works</option><option value="read_only">Read Only</option><option value="administrator">Administrator</option></select></label>
-    <label>Project access<select id="inviteProjectAccess"><option value="all_current">All current company projects</option><option value="assigned_only">Only projects assigned separately</option></select></label>
+    <label>Project access<select id="inviteProjectAccess" onchange="toggleInviteProjectPicker()"><option value="all_current">All current company projects</option><option value="assigned_only">Only projects assigned separately</option></select></label>
   </div>
+  <div id="inviteProjectPicker" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--line,#d7dee8);border-radius:10px"><strong>Select permitted projects</strong><p class="muted" style="margin:6px 0 10px">This staff member should only be assigned to the projects checked below.</p><div id="inviteProjectOptions" style="display:grid;gap:8px"></div></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" onclick="sendCompanyInvitation()">✉ Send Invitation</button><button class="btn" onclick="loadTeamRoles()">Refresh team</button></div>
   <div id="teamStatus" class="import-status" style="margin-top:12px">Configure the Version 35 invitation SQL and Edge Function in Supabase before sending invitations.</div>
   <h3 style="margin-top:22px">Team members</h3><div style="overflow:auto"><table><thead><tr><th>Member</th><th>Email / User ID</th><th>Role</th><th>Status</th></tr></thead><tbody id="teamRows"><tr><td colspan="4" class="empty">Click Refresh team to load members.</td></tr></tbody></table></div>
   <p class="muted" style="margin-top:12px">Invitations are sent through a secured server-side Edge Function. Never place a Supabase service-role key in this HTML or GitHub.</p></div>`);
 }
-async function sendCompanyInvitation(){
+function toggleInviteProjectPicker(){const picker=document.getElementById('inviteProjectPicker'),options=document.getElementById('inviteProjectOptions'),restricted=document.getElementById('inviteProjectAccess')?.value==='assigned_only';if(!picker||!options)return;picker.style.display=restricted?'block':'none';if(!restricted)return;const projects=Array.isArray(data?.projects)?data.projects:[];if(!projects.length){options.innerHTML='<span class="muted">No projects are available in this workspace yet.</span>';return;}options.innerHTML=projects.map(p=>{const id=String(p.db_id||p.id||'');return '<label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" class="invite-project-check" value="'+inlineEsc(id)+'" style="margin-top:4px"><span>'+inlineEsc(p.name||'Untitled project')+'<small class="muted" style="display:block">'+inlineEsc(p.location||'')+'</small></span></label>'}).join('')} async function sendCompanyInvitation(){
  const status=document.getElementById('teamStatus');
  const name=document.getElementById('inviteName')?.value.trim();
  const email=document.getElementById('inviteEmail')?.value.trim().toLowerCase();
  const role=document.getElementById('inviteRole')?.value;
  const projectAccess=document.getElementById('inviteProjectAccess')?.value;
+ const selectedProjectIds=projectAccess==='assigned_only'?[...document.querySelectorAll('.invite-project-check:checked')].map(x=>x.value):[];
  if(!currentCompany||!currentCompany.company_id){status.textContent='Select your company workspace first.';return;}
  if(!name){status.textContent='Enter the staff member’s name.';return;}
  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){status.textContent='Enter a valid email address.';return;}
+ if(projectAccess==='assigned_only'&&!selectedProjectIds.length){status.textContent='Select at least one project for this staff member.';return;}
  if(!sb||!currentUser){status.textContent='Please sign in again before inviting a member.';return;}
  if(role==='administrator'&&!confirm('You are inviting an Administrator with broad company access. Continue?'))return;
  status.textContent='Sending invitation…';
@@ -737,10 +739,10 @@ async function sendCompanyInvitation(){
    const supabaseUrl=String(c.SUPABASE_URL||'').replace(/\/$/,'');
    const anonKey=c.SUPABASE_PUBLISHABLE_KEY||'';
    if(!supabaseUrl||!anonKey)throw new Error('Supabase configuration was not found. Check config.js.');
-   const response=await fetch(supabaseUrl+'/functions/v1/streetwise-invite-member',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':anonKey},body:JSON.stringify({company_id:currentCompany.company_id,name,email,role,project_access:projectAccess})});
+   const response=await fetch(supabaseUrl+'/functions/v1/streetwise-invite-member',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':anonKey},body:JSON.stringify({company_id:currentCompany.company_id,name,email,role,project_access:projectAccess,project_ids:selectedProjectIds})});
    const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||result.message||('Invitation failed ('+response.status+').'));
    status.textContent=result.message||'Invitation request completed. Check the team list and the invitee’s email.';
-   document.getElementById('inviteName').value='';document.getElementById('inviteEmail').value='';await loadTeamRoles();
+   document.getElementById('inviteName').value='';document.getElementById('inviteEmail').value='';document.getElementById('inviteProjectAccess').value='all_current';toggleInviteProjectPicker();await loadTeamRoles();
  }catch(e){status.textContent='Could not send invitation: '+(e.message||String(e));}
 }
 async function loadTeamRoles(){
@@ -1611,4 +1613,3 @@ save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing wa
 boot();
 </script>
 </body></html>
-```

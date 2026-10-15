@@ -1176,20 +1176,9 @@ async function add(t){
     data.materials.push(item);
   }
 
-  if(t==='labour')data.labour.push({
-    trade:v('f1'),
-    workers:+v('f2'),
-    rate:+v('f3'),
-    days:+v('f4')
-  });
+  if(t==='labour'){const cp=currentProject();data.labour.push({project_id:cp?.db_id||cp?.id||null,project:cp?.name||'',trade:v('f1'),workers:+v('f2'),rate:+v('f3'),days:+v('f4')});}
 
-  if(t==='procurement')data.procurement.push({
-    item:v('f1'),
-    supplier:v('f2'),
-    qty:v('f3'),
-    value:+v('f4'),
-    status:v('f5')
-  });
+  if(t==='procurement'){const cp=currentProject();data.procurement.push({project_id:cp?.db_id||cp?.id||null,project:cp?.name||'',item:v('f1'),supplier:v('f2'),qty:v('f3'),value:+v('f4'),status:v('f5')});}
 
   if(t==='progress'){ closeModal(); show('progress'); return; }
 
@@ -1494,61 +1483,96 @@ function moduleAllowed(id){
 async function loadCurrentRole(){currentRole='read_only';if(!sb||!currentUser||!currentCompany)return;try{const r=await sb.rpc('streetwise_list_company_roles',{p_company_id:currentCompany.company_id});if(!r.error&&Array.isArray(r.data)){const row=r.data.find(x=>String(x.user_id)===String(currentUser.id));if(row&&roleModules[row.role]!==undefined)currentRole=row.role;}}catch(e){console.warn('Role lookup failed; using read_only navigation.',e)}nav()}
 async function selectCompanyWorkspace(companyId){const list=window._streetwiseCompanyChoices||[];const chosen=list.find(c=>c.company_id===companyId);if(!chosen)return;currentCompany=chosen;const ok=await loadCloudWorkspace();if(!ok){setAuthStatus(cloudLoadError||'Unable to load this company workspace.');return}await loadCurrentRole();cloudReady=true;document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();nav();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name+' · '+currentRole.replaceAll('_',' ');window._streetwiseCompanyChoices=null;}
 async function createCompany(){const name=document.getElementById('companyName').value.trim();if(!name){document.getElementById('companyStatus').textContent='Enter a company name.';return}document.getElementById('companyStatus').textContent='Creating workspace…';const r=await sb.rpc('create_company',{p_name:name});if(r.error){document.getElementById('companyStatus').textContent=r.error.message;return}const list=await sb.rpc('my_companies');if(list.error||!list.data?.length){document.getElementById('companyStatus').textContent=list.error?.message||'Company was created but could not be loaded.';return}currentCompany=list.data[0];const ok=await loadCloudWorkspace();if(!ok){document.getElementById('companyStatus').textContent=cloudLoadError||'Unable to load the new cloud workspace.';return}cloudReady=true;await loadCurrentRole();document.getElementById('companyScreen').style.display='none';currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';saveNavigation();render();nav();show('projects');document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name;toast('Company workspace created')}
+function streetwiseIsWorkspaceAdmin(){
+  return ['administrator','admin','owner'].includes(String(currentRole||'').toLowerCase());
+}
+const streetwiseProjectModuleKeys=['labour','procurement','variations','expenses','snags','reports','siteDiary','instructions','documents','submittals','quality'];
+function streetwiseProjectIdForItem(item, projects){
+  if(!item||typeof item!=='object')return null;
+  const direct=item.project_id||item.projectId||item.project_db_id;
+  if(direct&&projects.some(p=>String(p.db_id||p.id)===String(direct)))return String(direct);
+  const name=String(item.project||item.project_name||item.projectName||'').trim().toLowerCase();
+  if(name){const p=projects.find(x=>String(x.name||'').trim().toLowerCase()===name);if(p)return String(p.db_id||p.id);}
+  return null;
+}
+function streetwiseBuildProjectPayload(project, source, projects){
+  const pid=String(project.db_id||project.id), out={};
+  for(const key of streetwiseProjectModuleKeys){
+    const list=Array.isArray(source[key])?source[key]:[];
+    out[key]=list.filter(item=>streetwiseProjectIdForItem(item,projects)===pid);
+  }
+  const schedule=source.schedule&&typeof source.schedule==='object'?source.schedule:{};
+  out.schedule=schedule[pid]!==undefined?{[pid]:schedule[pid]}:{};
+  return out;
+}
+function streetwiseMergeProjectPayloads(rows, projects, base){
+  const merged=Object.assign(structuredClone(emptyWorkspace),base||{});
+  for(const key of streetwiseProjectModuleKeys)merged[key]=[];
+  merged.schedule={};
+  for(const row of rows||[]){
+    const payload=row.payload||{};
+    for(const key of streetwiseProjectModuleKeys)if(Array.isArray(payload[key]))merged[key].push(...payload[key]);
+    if(payload.schedule&&typeof payload.schedule==='object')Object.assign(merged.schedule,payload.schedule);
+  }
+  if(streetwiseIsWorkspaceAdmin()&&base){
+    for(const key of streetwiseProjectModuleKeys){
+      const legacy=Array.isArray(base[key])?base[key]:[];
+      merged[key].push(...legacy.filter(item=>!streetwiseProjectIdForItem(item,projects)));
+    }
+    const legacySchedule=base.schedule&&typeof base.schedule==='object'?base.schedule:{};
+    for(const [pid,value] of Object.entries(legacySchedule))if(!projects.some(p=>String(p.db_id||p.id)===String(pid)))merged.schedule[pid]=value;
+  }
+  return merged;
+}
+async function streetwisePersistProjectPayloads(){
+  const rows=[];
+  for(const project of data.projects){
+    const pid=String(project.db_id||project.id);
+    if(!pid||!project.db_id)continue;
+    rows.push({company_id:currentCompany.company_id,project_id:pid,payload:streetwiseBuildProjectPayload(project,data,data.projects),updated_by:currentUser.id,updated_at:new Date().toISOString()});
+  }
+  if(!rows.length)return true;
+  const r=await sb.from('workspace_project_data').upsert(rows,{onConflict:'company_id,project_id'});
+  if(r.error){toast('Project workspace save failed: '+r.error.message);return false;}
+  return true;
+}
 async function loadCloudWorkspace(){
   cloudLoadError='';
-
-  const r=await sb.from('workspace_data')
-    .select('payload')
-    .eq('company_id',currentCompany.company_id)
-    .maybeSingle();
-
-  if(r.error){
-    cloudLoadError=r.error.message;
-    return false;
+  const admin=streetwiseIsWorkspaceAdmin();
+  let legacyPayload=null;
+  if(admin){
+    const legacy=await sb.from('workspace_data').select('payload').eq('company_id',currentCompany.company_id).maybeSingle();
+    if(legacy.error){cloudLoadError='Legacy workspace load failed: '+legacy.error.message;return false;}
+    legacyPayload=legacy.data?.payload&&Object.keys(legacy.data.payload).length?legacy.data.payload:null;
   }
-
-  if(r.data?.payload && Object.keys(r.data.payload).length){
-    data=Object.assign(structuredClone(emptyWorkspace), r.data.payload||{}); data.siteDiary=data.siteDiary||[]; data.instructions=data.instructions||[]; data.documents=data.documents||[]; data.submittals=data.submittals||[]; data.documents=data.documents||[]; data.submittals=data.submittals||[]; data.documents=data.documents||[]; data.submittals=data.submittals||[]; data.documents=data.documents||[]; data.submittals=data.submittals||[];
-  }else{
-    data=structuredClone(emptyWorkspace);
-
-    const w=await sb.from('workspace_data').upsert({
-      company_id:currentCompany.company_id,
-      payload:data,
-      updated_by:currentUser.id,
-      updated_at:new Date().toISOString()
-    });
-
-    if(w.error){
-      cloudLoadError=w.error.message;
-      return false;
-    }
+  let projectQuery=sb.from('project_records').select('id,name,client,location,status,start_date,end_date,contract_value,created_at').eq('company_id',currentCompany.company_id);
+  if(!admin){
+    const assignments=await sb.from('project_members').select('project_id').eq('company_id',currentCompany.company_id).eq('user_id',currentUser.id);
+    if(assignments.error){cloudLoadError='Project assignments could not be loaded: '+assignments.error.message;return false;}
+    const assignedIds=[...new Set((assignments.data||[]).map(x=>x.project_id).filter(Boolean))];
+    if(!assignedIds.length){cloudLoadError='No projects have been assigned to your account. Ask your company administrator to assign a project.';return false;}
+    projectQuery=projectQuery.in('id',assignedIds);
   }
-
-  const p=await sb.from('project_records')
-    .select('id,name,client,location,status,start_date,end_date,contract_value')
-    .eq('company_id',currentCompany.company_id)
-    .order('created_at',{ascending:true});
-
-  if(p.error){
-    cloudLoadError='Project database load failed: '+p.error.message;
-    return false;
+  const p=await projectQuery.order('created_at',{ascending:true});
+  if(p.error){cloudLoadError='Project database load failed: '+p.error.message;return false;}
+  const projects=(p.data||[]).map(x=>({id:x.id,db_id:x.id,name:x.name,client:x.client||'',location:x.location||'',budget:Number(x.contract_value||0),spent:0,progress:0,status:x.status||'Active',start_date:x.start_date,end_date:x.end_date}));
+  if(!projects.length){data=structuredClone(emptyWorkspace);data.projects=[];render();return true;}
+  let scoped=await sb.from('workspace_project_data').select('project_id,payload').eq('company_id',currentCompany.company_id).in('project_id',projects.map(x=>x.db_id));
+  if(scoped.error){cloudLoadError='Project workspace load failed: '+scoped.error.message;return false;}
+  if(admin&&legacyPayload&&!(scoped.data||[]).length){
+    const rows=projects.map(project=>({company_id:currentCompany.company_id,project_id:project.db_id,payload:streetwiseBuildProjectPayload(project,legacyPayload,projects),updated_by:currentUser.id,updated_at:new Date().toISOString()}));
+    const migrated=await sb.from('workspace_project_data').upsert(rows,{onConflict:'company_id,project_id'});
+    if(migrated.error){cloudLoadError='Legacy project data migration failed (original data was preserved): '+migrated.error.message;return false;}
+    scoped=await sb.from('workspace_project_data').select('project_id,payload').eq('company_id',currentCompany.company_id).in('project_id',projects.map(x=>x.db_id));
+    if(scoped.error){cloudLoadError='Project workspace reload failed: '+scoped.error.message;return false;}
   }
-
-  data.projects=(p.data||[]).map(x=>({
-    id:x.id,
-    db_id:x.id,
-    name:x.name,
-    client:x.client||'',
-    location:x.location||'',
-    budget:Number(x.contract_value||0),
-    spent:0,
-    progress:0,
-    status:x.status||'Active',
-    start_date:x.start_date,
-    end_date:x.end_date
-  }));
-
+  if(admin&&!legacyPayload){
+    const init=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:structuredClone(emptyWorkspace),updated_by:currentUser.id,updated_at:new Date().toISOString()});
+    if(init.error){cloudLoadError='Legacy workspace initialization failed: '+init.error.message;return false;}
+  }
+  data=streetwiseMergeProjectPayloads(scoped.data||[],projects,admin?legacyPayload:null);
+  data.projects=projects;
+  data.siteDiary=data.siteDiary||[];data.instructions=data.instructions||[];data.documents=data.documents||[];data.submittals=data.submittals||[];data.quality=data.quality||[];data.reports=data.reports||[];data.snags=data.snags||[];data.expenses=data.expenses||[];data.variations=data.variations||[];data.labour=data.labour||[];data.procurement=data.procurement||[];
   const cat=await sb.from('material_categories').select('id,project_id,name,sort_order').eq('company_id',currentCompany.company_id).order('sort_order',{ascending:true}).order('name',{ascending:true});
   if(cat.error){cloudLoadError='Material categories load failed: '+cat.error.message;return false;}
   data.materialCategories=(cat.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,name:x.name,sort_order:x.sort_order||0}));
@@ -1607,7 +1631,16 @@ async function loadCloudWorkspace(){
   render();
   return true;
 }
-async function persistCloud(){if(!cloudReady||!currentCompany||!currentUser)return false;const r=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:data,updated_by:currentUser.id,updated_at:new Date().toISOString()});if(r.error){toast('Cloud save failed: '+r.error.message);return false}try{localStorage.setItem(userCacheKey('workspace-cache'),JSON.stringify(data))}catch(e){}return true}
+async function persistCloud(){
+  if(!cloudReady||!currentCompany||!currentUser)return false;
+  if(!await streetwisePersistProjectPayloads())return false;
+  if(streetwiseIsWorkspaceAdmin()){
+    const legacy=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:data,updated_by:currentUser.id,updated_at:new Date().toISOString()});
+    if(legacy.error){toast('Legacy admin workspace save failed: '+legacy.error.message);return false;}
+  }
+  try{localStorage.setItem(userCacheKey('workspace-cache'),JSON.stringify(data))}catch(e){}
+  return true;
+}
 async function signOut(){try{if(sb)await sb.auth.signOut()}finally{currentUser=null;currentCompany=null;cloudReady=false;currentRole='read_only';authLoadUid=null;authLoadPromise=null;data=structuredClone(emptyWorkspace);currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';window._streetwiseCompanyChoices=null;document.getElementById('companyScreen').style.display='none';document.getElementById('companyScreen').innerHTML='';showAuth(true);setAuthStatus('');nav();render();toast('Signed out') } }
 save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing was saved.');return false}persistCloud();return true};
 boot();

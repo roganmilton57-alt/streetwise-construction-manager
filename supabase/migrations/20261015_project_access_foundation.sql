@@ -88,7 +88,11 @@ create policy project_members_delete_company_admin
       select 1 from public.company_members cm
       where cm.company_id = project_members.company_id
         and cm.user_id = auth.uid()
-        and lower(coalesce(cm.role, '')) in ('administrator', 'admin', 'owner')
+        and exists (
+        select 1 from public.company_member_roles cr
+        where cr.company_id = cm.company_id and cr.user_id = cm.user_id
+          and lower(coalesce(cr.role, '')) in ('administrator', 'admin', 'owner')
+      )
     )
   );
 

@@ -1,27 +1,12 @@
 -- Streetwise Construction Manager: project-access foundation
--- Branch: fix/project-access-controls
--- SAFE FOUNDATION ONLY:
+-- SAFE FOUNDATION ONLY.
 -- This migration creates the assignment registry and helper functions.
--- Do not deploy project-level policies until index.html stops reading/writing the
--- company-wide workspace_data.payload directly. That payload contains multiple
--- projects and must be filtered/merged server-side first.
+-- Do not apply project-scoped RLS to workspace_data until its company-wide JSON
+-- payload has been migrated to project-scoped reads/writes. That payload holds
+-- multiple projects and is currently read/written as one company record.
 
-create table if not exists public.project_members (
-  id uuid primary key default gen_random_uuid(),
-  company_id uuid not null,
-  project_id uuid not null references public.project_records(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  assigned_by uuid references auth.users(id) on delete set null,
-  created_at timestamptz not null default now(),
-  unique (company_id, project_id, user_id),
-  constraint project_members_project_company_fk
-    foreign key (project_id, company_id)
-    references public.project_records(id, company_id)
-    on delete cascade
-);
-
--- The composite foreign key above requires a matching unique key on
--- project_records(id, company_id). Add it only if absent.
+-- Required target key for the composite foreign key below. Existing data is
+-- untouched; this only adds a uniqueness constraint.
 do $$
 begin
   if not exists (
@@ -34,6 +19,21 @@ begin
   end if;
 end $$;
 
+create table if not exists public.project_members (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null,
+  project_id uuid not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  assigned_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint project_members_project_company_fk
+    foreign key (project_id, company_id)
+    references public.project_records(id, company_id)
+    on delete cascade,
+  constraint project_members_user_project_key
+    unique (company_id, project_id, user_id)
+);
+
 create index if not exists project_members_company_user_idx
   on public.project_members(company_id, user_id);
 create index if not exists project_members_project_user_idx
@@ -45,13 +45,13 @@ drop policy if exists project_members_select_company_admin on public.project_mem
 create policy project_members_select_company_admin
   on public.project_members for select to authenticated
   using (
-    exists (
+    user_id = auth.uid()
+    or exists (
       select 1 from public.company_members cm
       where cm.company_id = project_members.company_id
         and cm.user_id = auth.uid()
-        and lower(cm.role) in ('administrator', 'admin', 'owner')
+        and lower(coalesce(cm.role, '')) in ('administrator', 'admin', 'owner')
     )
-    or user_id = auth.uid()
   );
 
 drop policy if exists project_members_insert_company_admin on public.project_members;
@@ -63,7 +63,7 @@ create policy project_members_insert_company_admin
       select 1 from public.company_members cm
       where cm.company_id = project_members.company_id
         and cm.user_id = auth.uid()
-        and lower(cm.role) in ('administrator', 'admin', 'owner')
+        and lower(coalesce(cm.role, '')) in ('administrator', 'admin', 'owner')
     )
     and exists (
       select 1 from public.project_records p
@@ -80,7 +80,7 @@ create policy project_members_delete_company_admin
       select 1 from public.company_members cm
       where cm.company_id = project_members.company_id
         and cm.user_id = auth.uid()
-        and lower(cm.role) in ('administrator', 'admin', 'owner')
+        and lower(coalesce(cm.role, '')) in ('administrator', 'admin', 'owner')
     )
   );
 
@@ -99,12 +99,13 @@ as $$
     select 1 from public.company_members cm
     where cm.company_id = p_company_id
       and cm.user_id = auth.uid()
-      and lower(cm.role) in ('administrator', 'admin', 'owner')
+      and lower(coalesce(cm.role, '')) in ('administrator', 'admin', 'owner')
   )
   or (
     p_project_id is not null
     and exists (
-      select 1 from public.company_members cm
+      select 1
+      from public.company_members cm
       join public.project_members pm
         on pm.company_id = cm.company_id
        and pm.user_id = cm.user_id
@@ -119,6 +120,6 @@ revoke all on function public.streetwise_can_access_project(uuid, uuid) from pub
 grant execute on function public.streetwise_can_access_project(uuid, uuid) to authenticated;
 
 comment on table public.project_members is
-  'Per-user project assignments. Do not treat invitation project_access as enforced until project-scoped payload reads/writes and RLS are deployed.';
+  'Per-user project assignments. Invitation project_access is not enforced until project-scoped payload reads/writes and RLS are deployed.';
 comment on function public.streetwise_can_access_project(uuid, uuid) is
-  'Returns true for company administrators or users assigned to the specific project. Foundation helper; activate in data-table RLS only with the workspace_data payload isolation update.';
+  'True for company administrators or users assigned to a specific project. Foundation helper; use in data-table RLS only with workspace_data payload isolation.';

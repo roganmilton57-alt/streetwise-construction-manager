@@ -810,13 +810,59 @@ if(t==='document')h=`<div class="form"><label>Document Type<select id="g1"><opti
 if(t==='quality')h=`<div class="form"><label>Project<select id="qc1">${opts()}</select></label><label>Record No.<input id="qc2" placeholder="e.g. IR-001 / cube test reference"></label><label>Record Type<select id="qc3"><option>Inspection Request</option><option>Work Inspection</option><option>Concrete Cube Test</option><option>Slump Test</option><option>Pressure Test</option><option>Material Test</option><option>Non-Conformance Report (NCR)</option><option>Corrective Action</option><option>Other Test / Inspection</option></select></label><label>Activity / Element<input id="qc4" placeholder="e.g. Ground floor slab reinforcement"></label><label>Location / Grid<input id="qc5"></label><label>Inspection / Test Date<input id="qc6" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Requested / Conducted By<input id="qc7"></label><label>Inspector / Laboratory<input id="qc8"></label><label>Result / Status<select id="qc9"><option>Requested</option><option>Scheduled</option><option>Passed</option><option>Passed with Comments</option><option>Failed</option><option>Not Accepted</option><option>Pending Results</option><option>Closed</option></select></label><label>Specification / Acceptance Criteria<input id="qc10"></label><label>Test Result / Findings<textarea id="qc11" rows="2"></textarea></label><label>Corrective Action / Follow-up<textarea id="qc12" rows="2"></textarea></label><label>Due Date<input id="qc13" type="date"></label><label>Related Drawing / Submittal / RFI<input id="qc14"></label><label>Notes<textarea id="qc15" rows="2"></textarea></label><button class="btn primary" onclick="addQualityRecord()">Save QA/QC Record</button></div>`;
 if(t==='submittal')h=`<div class="form"><label>Project<select id="s1">${opts()}</select></label><label>Submittal No.<input id="s2" placeholder="e.g. MAT-SUB-001"></label><label>Material / Product<input id="s3" placeholder="e.g. Cement, tiles, sanitary fittings"></label><label>Submittal Type<select id="s4"><option>Material Approval</option><option>Product Data</option><option>Sample Approval</option><option>Shop Drawing</option><option>Method Statement</option><option>Technical Data</option><option>Other</option></select></label><label>Specification / BOQ Reference<input id="s5"></label><label>Supplier / Manufacturer<input id="s6"></label><label>Date Submitted<input id="s7" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Consultant / Reviewer<input id="s8"></label><label>Status<select id="s9"><option>Submitted</option><option>Under Review</option><option>Approved</option><option>Approved with Comments</option><option>Rejected</option><option>Resubmit</option></select></label><label>Response Date<input id="s10" type="date"></label><label>Linked Procurement Item<input id="s11" placeholder="Optional procurement item"></label><label>Remarks / Conditions<textarea id="s12" rows="3"></textarea></label><button class="btn primary" onclick="addSubmittal()">Save Submittal</button></div>`;
 if(t==='submittal')h=`<div class="form"><label>Project<select id="s1">${opts()}</select></label><label>Submittal No.<input id="s2" placeholder="e.g. MAT-SUB-001"></label><label>Material / Product<input id="s3" placeholder="e.g. Cement, tiles, sanitary fittings"></label><label>Submittal Type<select id="s4"><option>Material Approval</option><option>Product Data</option><option>Sample Approval</option><option>Shop Drawing</option><option>Method Statement</option><option>Technical Data</option><option>Other</option></select></label><label>Specification / BOQ Reference<input id="s5"></label><label>Supplier / Manufacturer<input id="s6"></label><label>Date Submitted<input id="s7" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Consultant / Reviewer<input id="s8"></label><label>Status<select id="s9"><option>Submitted</option><option>Under Review</option><option>Approved</option><option>Approved with Comments</option><option>Rejected</option><option>Resubmit</option></select></label><label>Response Date<input id="s10" type="date"></label><label>Linked Procurement Item<input id="s11" placeholder="Optional procurement item"></label><label>Remarks / Conditions<textarea id="s12" rows="3"></textarea></label><button class="btn primary" onclick="addSubmittal()">Save Submittal</button></div>`;
-if(t==='instruction')h=`<div class="form"><label>Type<select id="i1"><option>Site Instruction</option><option>RFI</option><option>Consultant Instruction</option><option>Client Instruction</option><option>Request for Approval</option></select></label><label>Project<select id="i2">${opts()}</select></label><label>Reference No.<input id="i3" placeholder="e.g. SI-001 / RFI-001"></label><label>Date<input id="i4" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Subject<input id="i5"></label><label>Description / Question<textarea id="i6" rows="3"></textarea></label><label>Issued By / From<input id="i7"></label><label>Responsible Party<input id="i8"></label><label>Due Date<input id="i9" type="date"></label><label>Status<select id="i10"><option>Open</option><option>Pending Response</option><option>Responded</option><option>Closed</option><option>Cancelled</option></select></label><label>Response / Action Taken<textarea id="i11" rows="3"></textarea></label><label>Notes<textarea id="i12" rows="2"></textarea></label><button class="btn primary" onclick="addInstruction()">Save Record</button></div>`;
+if(t==='instruction')h=`<div class="form"><label>Type<select id="i1"><option>Site Instruction</option><option>RFI</option><option>Consultant Instruction</option><option>Client Instruction</option><option>Request for Approval</option></select></label><label>Project<select id="i2">${opts()}</select></label><label>Reference No.<input id="i3" placeholder="e.g. SI-001 / RFI-001"></label><label>Date<input id="i4" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Subject<input id="i5"></label><label>Description / Question<textarea id="i6" rows="3"></textarea></label><label>Issued By / From<input id="i7"></label><label>Responsible Party<input id="i8"></label><label>Due Date<input id="i9" type="date"></label><label>Status<select id="i10"><option>Open</option><option>Pending Response</option><option>Responded</option><option>Closed</option><option>Cancelled</option></select></label><label>Response / Action Taken<textarea id="i11" rows="3"></textarea></label><label>Notes<textarea id="i12" rows="2"></textarea></label><label>Handwritten instruction photos<input id="instructionPhotos" type="file" accept="image/*" capture="environment" multiple onchange="previewInstructionPhotos(this)" style="padding:8px;background:#fff"></label><div id="instructionPhotoPreview" class="card" style="padding:9px;font-size:11px"><span class="muted">No photos selected yet.</span></div><div class="muted" style="font-size:11px">Attach up to 10 images, maximum 10 MB each. Photos are stored privately and follow project access permissions.</div><button class="btn primary" onclick="addInstruction()">Save Record</button></div>`;
 if(t==='snag')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Description<input id="f2"></label><label>Priority<select id="f3"><option>High</option><option>Medium</option><option>Low</option></select></label><button class="btn primary" onclick="add('snag')">Add Snag</button></div>`;
 if(t==='expense')h=`<div class="form"><label>Project<select id="f1">${opts()}</select></label><label>Category<select id="f2"><option>Petty Cash</option><option>Transport</option><option>Site</option><option>Tools</option><option>Other</option></select></label><label>Description<input id="f3"></label><label>Amount (KES)<input id="f4" type="number"></label><button class="btn primary" onclick="add('expense')">Add Expense</button></div>`;
 if(t==='excelImport')h=excelImportForm(importType||'boq');
 if(t==='scheduleImport')h=scheduleImportForm();
 document.getElementById('modalBody').innerHTML=h;document.getElementById('modal').classList.add('open')}
 
+let instructionPhotoFiles=[];
+function previewInstructionPhotos(input){
+  instructionPhotoFiles=Array.from(input&&input.files||[]);
+  const box=document.getElementById('instructionPhotoPreview');if(!box)return;
+  if(!instructionPhotoFiles.length){box.innerHTML='<span class="muted">No photos selected yet.</span>';return;}
+  box.innerHTML=instructionPhotoFiles.map(function(file){return '<div style="padding:5px 0;border-bottom:1px solid var(--line)">📷 '+inlineEsc(file.name)+' <small class="muted">('+(file.size/1024/1024).toFixed(1)+' MB)</small></div>';}).join('');
+}
+async function uploadInstructionPhotos(projectId,instructionId,files){
+  if(!files.length)return [];
+  if(!cloudReady||!currentCompany||!currentUser||!sb)throw new Error('Cloud connection is not ready. Please sign in again.');
+  if(!projectId)throw new Error('This instruction has no database project ID, so photos cannot be linked safely.');
+  if(files.length>10)throw new Error('Please attach no more than 10 photos to one instruction.');
+  const uploaded=[];
+  try{
+    for(let i=0;i<files.length;i++){
+      const file=files[i];
+      if(!/^image\//i.test(file.type||''))throw new Error(file.name+' is not an image file.');
+      if(file.size>10*1024*1024)throw new Error(file.name+' is larger than 10 MB. Please choose a smaller image.');
+      const safeName=String(file.name||'photo').normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-100)||'photo.jpg';
+      const path=currentCompany.company_id+'/'+projectId+'/'+instructionId+'/'+Date.now()+'-'+i+'-'+safeName;
+      const result=await sb.storage.from('site-instruction-photos').upload(path,file,{contentType:file.type||'image/jpeg',upsert:false});
+      if(result.error)throw new Error('Photo upload failed: '+result.error.message);
+      uploaded.push({path:path,name:file.name||safeName,type:file.type||'image/jpeg',size:file.size,uploadedAt:new Date().toISOString()});
+    }
+    return uploaded;
+  }catch(e){
+    if(uploaded.length)await sb.storage.from('site-instruction-photos').remove(uploaded.map(function(x){return x.path;}));
+    throw e;
+  }
+}
+async function viewInstructionPhotos(id){
+  const record=instructionById(id);if(!record)return;
+  const photos=Array.isArray(record.attachments)?record.attachments:[];
+  if(!photos.length){toast('No photos attached to this instruction');return;}
+  document.getElementById('modalTitle').textContent='Instruction Photos · '+(record.ref||record.subject||'');
+  document.getElementById('modalBody').innerHTML='<p class="muted">Loading secure photo links…</p>';
+  document.getElementById('modal').classList.add('open');
+  const cards=[];
+  for(const photo of photos){
+    const result=await sb.storage.from('site-instruction-photos').createSignedUrl(photo.path,3600);
+    if(result.error){cards.push('<div class="card">'+inlineEsc(photo.name||'Photo')+'<p class="muted">Could not open this photo: '+inlineEsc(result.error.message)+'</p></div>');continue;}
+    const url=inlineEsc(result.data.signedUrl);
+    cards.push('<div class="card" style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">'+inlineEsc(photo.name||'Instruction photo')+'</div><a href="'+url+'" target="_blank" rel="noopener"><img src="'+url+'" alt="'+inlineEsc(photo.name||'Instruction photo')+'" style="width:100%;max-height:65vh;object-fit:contain;border-radius:8px;background:#f3f6f8"></a><div style="margin-top:8px"><a class="btn" href="'+url+'" target="_blank" rel="noopener" download>Open / Download Photo</a></div></div>');
+  }
+  document.getElementById('modalBody').innerHTML='<p class="muted" style="font-size:12px">'+photos.length+' attached photo(s). Secure links expire after one hour.</p>'+cards.join('');
+}
 let excelImportState={type:null,rows:[],headers:[],mapping:{},fileName:'',sheets:[],sheetIndex:0,headerRow:0};
 
 function excelImportForm(type){
@@ -1297,11 +1343,18 @@ function variationSourceLabel(x){
   const id=x.sourceInstructionId; if(!id)return '—';
   const i=instructionById(id); return i?`${i.ref||'Instruction'}${i.subject?' · '+i.subject:''}`:(x.sourceInstructionRef||id);
 }
-function addInstruction(){
+async function addInstruction(){
   const p=data.projects.find(x=>x.name===v('i2'));
-  const rec={id:'IR-'+Date.now(),type:v('i1'),project:v('i2'),project_id:p?.db_id||p?.id||null,ref:v('i3')||('IR-'+String((data.instructions||[]).length+1).padStart(3,'0')),date:v('i4'),subject:v('i5'),description:v('i6'),issuedBy:v('i7'),responsible:v('i8'),dueDate:v('i9'),status:v('i10'),response:v('i11'),notes:v('i12')};
+  const rec={id:'IR-'+Date.now(),type:v('i1'),project:v('i2'),project_id:p?.db_id||p?.id||null,ref:v('i3')||('IR-'+String((data.instructions||[]).length+1).padStart(3,'0')),date:v('i4'),subject:v('i5'),description:v('i6'),issuedBy:v('i7'),responsible:v('i8'),dueDate:v('i9'),status:v('i10'),response:v('i11'),notes:v('i12'),attachments:[]};
   if(!rec.project||!rec.subject){toast('Project and Subject are required');return;}
-  data.instructions.unshift(rec);save();closeModal();render();show('instructions');toast('Site instruction / RFI saved');
+  const files=instructionPhotoFiles.slice();
+  try{
+    if(files.length){toast('Uploading instruction photos…');rec.attachments=await uploadInstructionPhotos(rec.project_id,rec.id,files);}
+    data.instructions=data.instructions||[];data.instructions.unshift(rec);
+    const ok=await persistCloud();
+    if(!ok){data.instructions=data.instructions.filter(function(x){return String(x.id)!==String(rec.id);});if(rec.attachments.length)await sb.storage.from('site-instruction-photos').remove(rec.attachments.map(function(x){return x.path;}));toast('Instruction could not be saved to the cloud. Please try again.');return;}
+    instructionPhotoFiles=[];closeModal();render();show('instructions');toast('Site instruction / RFI saved'+(rec.attachments.length?' with '+rec.attachments.length+' photo(s)':''));
+  }catch(e){toast(e.message||'Could not save instruction photos.');}
 }
 function instructionStatus(x){
   if(x.status==='Closed'||x.status==='Cancelled')return x.status;
@@ -1312,7 +1365,7 @@ function instructionsSection(){
   const list=projectRows(data.instructions||[]).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   const open=list.filter(x=>!['Closed','Cancelled'].includes(x.status)).length;
   const overdue=list.filter(x=>instructionStatus(x)==='Overdue').length;
-  const rows=list.map(x=>{const st=instructionStatus(x), linked=linkedVariationsForInstruction(x.id);return `<tr><td>${inlineEsc(x.ref||'')}</td><td>${inlineEsc(x.type||'')}</td><td>${inlineEsc(x.date||'')}</td><td><strong>${inlineEsc(x.subject||'')}</strong><div class="muted">${inlineEsc(x.project||'')}</div></td><td>${inlineEsc(x.responsible||'')}</td><td>${inlineEsc(x.dueDate||'')}</td><td><span class="pill ${st==='Overdue'?'red':st==='Closed'?'green':st==='Responded'?'green':'orange'}">${inlineEsc(st)}</span></td><td>${inlineEsc(x.response||'')}${linked.length?`<div class="muted">Variation: ${inlineEsc(linked.map(v=>v.ref).join(', '))}</div>`:''}</td><td><button class="btn" onclick="openVariationFromInstruction('${x.id}')">+ Variation</button> <button class="btn" onclick="printInstruction('${x.id}')">🖨️ Print</button></td></tr>`}).join('');
+  const rows=list.map(x=>{const st=instructionStatus(x), linked=linkedVariationsForInstruction(x.id), photoCount=Array.isArray(x.attachments)?x.attachments.length:0;return `<tr><td>${inlineEsc(x.ref||'')}</td><td>${inlineEsc(x.type||'')}</td><td>${inlineEsc(x.date||'')}</td><td><strong>${inlineEsc(x.subject||'')}</strong><div class="muted">${inlineEsc(x.project||'')}${photoCount?' · 📷 '+photoCount+' photo(s)':''}</div></td><td>${inlineEsc(x.responsible||'')}</td><td>${inlineEsc(x.dueDate||'')}</td><td><span class="pill ${st==='Overdue'?'red':st==='Closed'?'green':st==='Responded'?'green':'orange'}">${inlineEsc(st)}</span></td><td>${inlineEsc(x.response||'')}${linked.length?`<div class="muted">Variation: ${inlineEsc(linked.map(v=>v.ref).join(', '))}</div>`:''}</td><td>${photoCount?`<button class="btn" onclick="viewInstructionPhotos('${x.id}')">📷 Photos (${photoCount})</button> `:''}<button class="btn" onclick="openVariationFromInstruction('${x.id}')">+ Variation</button> <button class="btn" onclick="printInstruction('${x.id}')">🖨️ Print</button></td></tr>`}).join('');
   const linkedCount=list.reduce((n,x)=>n+linkedVariationsForInstruction(x.id).length,0); const head=`<div class="kpis" style="margin-bottom:14px"><div class="kpi"><small>Open</small><strong>${open}</strong></div><div class="kpi"><small>Overdue</small><strong class="${overdue?'down':''}">${overdue}</strong></div><div class="kpi"><small>Linked Variations</small><strong>${linkedCount}</strong></div><div class="kpi"><small>Total Records</small><strong>${list.length}</strong></div></div>`;
   return `<section class="module-card" id="module-instructions"><div class="section-head"><div><h2>Site Instructions & RFIs</h2><p class="muted">Track instructions, RFIs, approvals, responses, responsible parties and due dates for the selected project.</p></div><div class="module-tools"><button class="btn primary" onclick="openModal('instruction')">+ New Instruction / RFI</button></div></div>${head}<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Type</th><th>Date</th><th>Subject / Project</th><th>Responsible</th><th>Due Date</th><th>Status</th><th>Response / Action</th><th>Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="9" class="muted">No site instructions or RFIs recorded for this project.</td></tr>`}</tbody></table></div></section>`;
 }

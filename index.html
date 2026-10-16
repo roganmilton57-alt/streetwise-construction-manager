@@ -1704,10 +1704,17 @@ async function loadCloudWorkspace(){
 }
 async function persistCloud(){
   if(!cloudReady||!currentCompany||!currentUser)return false;
+  // The project-scoped payload is the source of truth for current project records.
+  // Do not report the entire save as failed if only the legacy admin mirror fails:
+  // callers may otherwise remove a record that was already persisted per-project.
   if(!await streetwisePersistProjectPayloads())return false;
   if(streetwiseIsWorkspaceAdmin()){
-    const legacy=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:data,updated_by:currentUser.id,updated_at:new Date().toISOString()});
-    if(legacy.error){toast('Legacy admin workspace save failed: '+legacy.error.message);return false;}
+    try{
+      const legacy=await sb.from('workspace_data').upsert({company_id:currentCompany.company_id,payload:data,updated_by:currentUser.id,updated_at:new Date().toISOString()});
+      if(legacy.error)toast('Project records were saved, but the legacy workspace mirror could not be updated: '+legacy.error.message);
+    }catch(e){
+      toast('Project records were saved, but the legacy workspace mirror could not be updated: '+(e.message||'unknown error'));
+    }
   }
   try{localStorage.setItem(userCacheKey('workspace-cache'),JSON.stringify(data))}catch(e){}
   return true;

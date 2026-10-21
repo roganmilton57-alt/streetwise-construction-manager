@@ -69,6 +69,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;
   <div><div class="eyebrow">Construction Control System</div><h1 id="title">Dashboard</h1><p id="subtitle">Portfolio, commercial and site control</p></div>
   <div class="actions"><select id="projectContext" class="btn" onchange="setProject(this.value)" style="max-width:220px"><option value="">All Projects</option></select><button class="btn install" id="installBtn" onclick="installApp()">Install App</button><button class="btn secondary" onclick="exportData()">Export</button><button class="btn" onclick="signOut()">Log out</button><button class="btn primary" onclick="openModal('project')">+ New Project</button></div>
  </header>
+ <div id="cloudStatusBanner" role="status" aria-live="polite" style="display:none;margin:0 0 14px;padding:12px 14px;border:1px solid #e6c98a;border-left:4px solid #bd7620;border-radius:9px;background:#fffaf0;color:#664b1c;font-size:12px;white-space:pre-wrap"></div>
  <div id="modules"></div>
 </main>
 </div>
@@ -1498,6 +1499,7 @@ async function boot(){
   catch(e){ setAuthStatus('Cloud connection error: '+e.message); }
 }
 function setAuthStatus(t){const e=document.getElementById('authStatus'); if(e)e.textContent=t}
+function setCloudStatus(message){const e=document.getElementById('cloudStatusBanner');if(!e)return;e.textContent=message||'';e.style.display=message?'block':'none';}
 function showAuth(v){document.getElementById('authScreen').style.display=v?'flex':'none'; if(v) document.getElementById('companyScreen').style.display='none'}
 function toggleAuthMode(){authMode=authMode==='signin'?'signup':'signin';document.getElementById('authTitle').textContent=authMode==='signin'?'Sign in':'Create your account';document.getElementById('authSub').textContent=authMode==='signin'?'Access your construction projects from phone or PC.':'Create the first user account for your Streetwise company.';document.getElementById('nameWrap').style.display=authMode==='signup'?'grid':'none';document.getElementById('authSubmit').textContent=authMode==='signin'?'Sign in':'Create account';document.getElementById('authToggle').textContent=authMode==='signin'?'Create an account':'Back to sign in';setAuthStatus('')}
 async function submitAuth(){if(!sb){setAuthStatus('Supabase is not configured.');return}const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value,name=document.getElementById('authName').value.trim();if(!email||!password){setAuthStatus('Enter email and password.');return}setAuthStatus('Working…');let r;if(authMode==='signup')r=await sb.auth.signUp({email,password,options:{data:{full_name:name}}});else r=await sb.auth.signInWithPassword({email,password});if(r.error){setAuthStatus(r.error.message);return}if(authMode==='signup'&&!r.data.session){setAuthStatus('Account created. Check your email to confirm, then sign in.');return}if(r.data.user)await onSignedIn(r.data.user)}
@@ -1508,7 +1510,7 @@ async function onSignedIn(user){
   authLoadPromise=(async()=>{
     const previousUid=currentUser?.id;
     if(previousUid&&previousUid!==user.id){data=structuredClone(emptyWorkspace);currentCompany=null;currentProjectId=null;currentModuleId='projects';currentRole='read_only';}
-    currentUser=user;cloudReady=false;cloudLoadError='';showAuth(false);
+    currentUser=user;cloudReady=false;cloudLoadError='';setCloudStatus('Connecting to the Streetwise cloud workspace…');showAuth(false);
     const savedNav=restoreNavigation();
     const r=await sb.rpc('my_companies');
     if(r.error){showAuth(true);setAuthStatus(r.error.message);return}
@@ -1531,7 +1533,7 @@ async function onSignedIn(user){
     await loadCurrentRole();
     const ok=await loadCloudWorkspace();
     if(!ok){showAuth(true);setAuthStatus(cloudLoadError||'Unable to load the cloud workspace. No local data was used.');return}
-    cloudReady=true;document.getElementById('companyScreen').style.display='none';
+    cloudReady=true;document.getElementById('companyScreen').style.display='none';setCloudStatus('');
     const savedProject=data.projects.find(p=>String(p.db_id||p.id||'')===String(savedNav?.projectId||''));
     if(savedNav?.companyId===currentCompany.company_id){currentProjectId=savedProject?(savedProject.db_id||savedProject.id):null;currentModuleId=streetwiseModulesV36.some(m=>m[0]===savedNav.moduleId&&moduleAllowed(m[0]))?savedNav.moduleId:'projects';currentMaterialCategory=savedNav.materialCategory||'All';}
     else{currentProjectId=null;currentModuleId='projects';currentMaterialCategory='All';}
@@ -1539,7 +1541,14 @@ async function onSignedIn(user){
     document.querySelector('.sidefoot').textContent='Commercial Cloud · '+currentCompany.company_name+' · '+currentRole.replaceAll('_',' ');
     toast('Cloud workspace connected');
   })();
-  try{return await authLoadPromise}finally{authLoadPromise=null;}
+  try{return await authLoadPromise}catch(e){
+    cloudReady=false;
+    const detail=String(e?.message||e||'Unknown workspace loading error');
+    console.error('Streetwise cloud workspace failed to initialize:',e);
+    setCloudStatus('Cloud workspace connection failed. '+detail+' — Your existing cloud records have not been intentionally deleted. Reload the page after resolving this error.');
+    showAuth(false);
+    return false;
+  }finally{authLoadPromise=null;}
 }
 function moduleAllowed(id){
   if(currentRole==='administrator') return true;

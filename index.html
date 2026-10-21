@@ -1359,7 +1359,7 @@ async function addInstruction(){
 }
 function instructionStatus(x){
   if(x.status==='Closed'||x.status==='Cancelled')return x.status;
-  if(x.dueDate && String(x.dueDate)<today && x.status!=='Closed')return 'Overdue';
+  if(x.dueDate && String(x.dueDate)<new Date().toISOString().slice(0,10) && x.status!=='Closed')return 'Overdue';
   return x.status||'Open';
 }
 function instructionsSection(){

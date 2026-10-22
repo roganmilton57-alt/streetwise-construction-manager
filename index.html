@@ -514,7 +514,7 @@ async function inlineSave(el){
   }
   el.dataset.saving='1';el.classList.add('saving');
   const moduleBefore=currentModuleId||'dashboard', projectBefore=currentProjectId;
-  const fail=(msg)=>{el.textContent=old;el.classList.add('error');setTimeout(()=>el.classList.remove('error'),900);toast(msg)};
+  const originalValue=x[field];const fail=(msg)=>{if(t==='material'&&['deliveryNote','vehicleReg','receivedTime','receivedBy'].includes(field))x[field]=originalValue;el.textContent=old;el.classList.add('error');setTimeout(()=>el.classList.remove('error'),900);toast(msg)};
   try{
     if(t==='boq'){
       const patch={};
@@ -546,7 +546,7 @@ async function inlineSave(el){
       else if(field==='notes')x.notes=String(value),patch.notes=x.notes;
       else return;
       x.totalCost=materialTotalCost(x);x.stock=materialBalance(x);
-      if(cloudReady&&x.db_id){Object.assign(patch,{total_cost:x.totalCost,stock:x.stock,updated_at:new Date().toISOString()});const r=await sb.from('material_records').update(patch).eq('id',x.db_id).eq('company_id',currentCompany.company_id);if(r.error){fail('Material update failed: '+r.error.message);return}}
+      if(cloudReady&&x.db_id){Object.assign(patch,{total_cost:x.totalCost,stock:x.stock,updated_at:new Date().toISOString()});const r=await sb.from('material_records').update(patch).eq('id',x.db_id).eq('company_id',currentCompany.company_id).select('id,delivery_note,vehicle_reg,received_time,received_by').maybeSingle();if(r.error){fail('Material update failed: '+r.error.message);return}if(!r.data){fail('Receipt update was not confirmed by Supabase. Check project access and try again.');return}const check={deliveryNote:'delivery_note',vehicleReg:'vehicle_reg',receivedTime:'received_time',receivedBy:'received_by'};if(check[field]&&String(r.data[check[field]]??'')!==String(patch[check[field]]??'')){fail('Supabase did not confirm the receipt details. Please retry.');return}}
     }else{
       // Other modules still use the full Edit action for structured fields.
       return;
@@ -1547,7 +1547,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=37');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=38');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

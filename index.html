@@ -1114,11 +1114,19 @@ async function addMaterialUsage(){
   const date=document.getElementById('u1').value, projectName=document.getElementById('u2').value, selectedStockKey=document.getElementById('u3').value, quantity=Number(document.getElementById('u4').value||0), usedFor=document.getElementById('u5').value, notes=document.getElementById('u6').value;
   const selectedStock=materialSummaryRows().find(x=>x.key===selectedStockKey);
   const name=selectedStock?.name||'';
-  if(!name||!Number.isFinite(quantity)||quantity<=0){toast('Enter a material and a quantity greater than zero');return;}
+  if(!selectedStock||!name||!Number.isFinite(quantity)||quantity<=0){toast('Choose a material and enter a quantity greater than zero');return;}
   const p=data.projects.find(x=>x.name===projectName);
-  const summary=selectedStock && String(selectedStock.project_id||'')===String(p?.db_id||p?.id||'') ? selectedStock : null;
-  if(summary && quantity>summary.balance){toast(`Usage exceeds available balance of ${num(summary.balance)} ${summary.unit}`);return;}
-  const item={date,project:projectName||'General / Company Stock',project_id:p?.db_id||p?.id||null,category:summary?.category||'General Site Materials',name,unit:summary?.unit||'',quantity,usedFor,notes};
+  const selectedProjectId=String(p?.db_id||p?.id||'');
+  const stockProjectId=String(selectedStock.project_id||'');
+  if(stockProjectId!==selectedProjectId){
+    toast(`This material belongs to ${selectedStock.project||'General / Company Stock'}. Select that project before recording usage.`);
+    return;
+  }
+  if(quantity>Number(selectedStock.balance||0)){
+    toast(`Usage exceeds available balance of ${num(selectedStock.balance)} ${selectedStock.unit}`);
+    return;
+  }
+  const item={date,project:projectName||'General / Company Stock',project_id:p?.db_id||p?.id||null,category:selectedStock.category||'General Site Materials',name,unit:selectedStock.unit||'',quantity,usedFor,notes};
   if(cloudReady&&currentCompany){const r=await sb.from('material_usage_records').insert({company_id:currentCompany.company_id,project_id:item.project_id,usage_date:item.date,material:item.name,unit:item.unit,quantity:item.quantity,used_for:item.usedFor,notes:item.notes,created_by:currentUser.id}).select('id').single();if(r.error){toast('Material usage save failed: '+r.error.message);return;}item.db_id=r.data.id;}
   data.materialUsage.push(item);save();closeModal();render();show('materials');toast('Material usage recorded');
 }
@@ -1547,7 +1555,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=38');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=39');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

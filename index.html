@@ -539,10 +539,10 @@ async function inlineSave(el){
       else if(field==='qtyReceived')x.qtyReceived=Number(value),patch.qty_received=x.qtyReceived;
       else if(field==='unitCost')x.unitCost=Number(value),patch.unit_cost=x.unitCost;
       else if(field==='supplier')x.supplier=String(value),patch.supplier=x.supplier;
-      else if(field==='deliveryNote')x.deliveryNote=String(value);
-      else if(field==='vehicleReg')x.vehicleReg=String(value);
-      else if(field==='receivedTime')x.receivedTime=String(value);
-      else if(field==='receivedBy')x.receivedBy=String(value);
+      else if(field==='deliveryNote')x.deliveryNote=String(value),patch.delivery_note=x.deliveryNote;
+      else if(field==='vehicleReg')x.vehicleReg=String(value),patch.vehicle_reg=x.vehicleReg;
+      else if(field==='receivedTime')x.receivedTime=String(value),patch.received_time=x.receivedTime;
+      else if(field==='receivedBy')x.receivedBy=String(value),patch.received_by=x.receivedBy;
       else if(field==='notes')x.notes=String(value),patch.notes=x.notes;
       else return;
       x.totalCost=materialTotalCost(x);x.stock=materialBalance(x);
@@ -1720,7 +1720,7 @@ async function loadCloudWorkspace(){
   if(missing.length){const ins=await sb.from('material_categories').insert(missing).select('id,project_id,name,sort_order');if(ins.error){cloudLoadError='Default material categories setup failed: '+ins.error.message;return false;}data.materialCategories.push(...(ins.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,name:x.name,sort_order:x.sort_order||0})));}
 
   const legacyMaterials=Array.isArray(data.materials)?structuredClone(data.materials):[];
-  const mat=await sb.from('material_records').select('id,project_id,category,transaction_date,name,unit,qty_received,unit_cost,total_cost,supplier,qty_used,stock,reorder,notes').eq('company_id',currentCompany.company_id).order('transaction_date',{ascending:true}).order('created_at',{ascending:true});
+  const mat=await sb.from('material_records').select('id,project_id,category,transaction_date,name,unit,qty_received,unit_cost,total_cost,supplier,qty_used,stock,reorder,notes,delivery_note,vehicle_reg,received_time,received_by').eq('company_id',currentCompany.company_id).order('transaction_date',{ascending:true}).order('created_at',{ascending:true});
   if(mat.error){cloudLoadError='Materials database load failed: '+mat.error.message;return false;}
   if(!(mat.data||[]).length && legacyMaterials.length){
     const rows=legacyMaterials.map(x=>({company_id:currentCompany.company_id,project_id:x.project_id||null,transaction_date:x.date||new Date().toISOString().slice(0,10),name:x.name,unit:x.unit,qty_received:Number(x.qtyReceived??x.stock??0),unit_cost:Number(x.unitCost||x.unit_cost||0),total_cost:Number(x.totalCost||x.stock||0),supplier:x.supplier||'',qty_used:0,stock:Number(x.qtyReceived??x.stock??0),reorder:Number(x.reorder||0),notes:x.notes||'',created_by:currentUser.id}));
@@ -1730,7 +1730,7 @@ async function loadCloudWorkspace(){
   }
   const materialProjectNames=new Map(data.projects.map(x=>[x.db_id,x.name]));
   const legacyMaterialById=new Map(legacyMaterials.filter(x=>x.db_id||x.id).map(x=>[String(x.db_id||x.id),x]));
-  data.materials=(mat.data||[]).map(x=>{const saved=legacyMaterialById.get(String(x.id))||{};return {id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'General / Company Stock',category:x.category||saved.category||'General Site Materials',date:x.transaction_date||saved.date||'',name:x.name||saved.name||'',unit:x.unit||saved.unit||'',qtyReceived:Number(x.qty_received??saved.qtyReceived??saved.stock??0),unitCost:Number(x.unit_cost??saved.unitCost??0),totalCost:Number(x.total_cost??saved.totalCost??0),supplier:x.supplier??saved.supplier??'',deliveryNote:saved.deliveryNote||'',vehicleReg:saved.vehicleReg||'',receivedTime:saved.receivedTime||'',receivedBy:saved.receivedBy||'',qtyUsed:0,stock:Number(x.qty_received??x.stock??saved.qtyReceived??saved.stock??0),reorder:Number(x.reorder??saved.reorder??0),notes:x.notes??saved.notes??''}});
+  data.materials=(mat.data||[]).map(x=>{const saved=legacyMaterialById.get(String(x.id))||{};return {id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'General / Company Stock',category:x.category||saved.category||'General Site Materials',date:x.transaction_date||saved.date||'',name:x.name||saved.name||'',unit:x.unit||saved.unit||'',qtyReceived:Number(x.qty_received??saved.qtyReceived??saved.stock??0),unitCost:Number(x.unit_cost??saved.unitCost??0),totalCost:Number(x.total_cost??saved.totalCost??0),supplier:x.supplier??saved.supplier??'',deliveryNote:x.delivery_note??saved.deliveryNote??'',vehicleReg:x.vehicle_reg??saved.vehicleReg??'',receivedTime:x.received_time??saved.receivedTime??'',receivedBy:x.received_by??saved.receivedBy??'',qtyUsed:0,stock:Number(x.qty_received??x.stock??saved.qtyReceived??saved.stock??0),reorder:Number(x.reorder??saved.reorder??0),notes:x.notes??saved.notes??''}});
 
   const u=await sb.from('material_usage_records').select('id,project_id,usage_date,material,unit,quantity,used_for,notes').eq('company_id',currentCompany.company_id).order('usage_date',{ascending:true}).order('created_at',{ascending:true});
   if(u.error){cloudLoadError='Material usage database load failed: '+u.error.message;return false;}

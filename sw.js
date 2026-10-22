@@ -1,5 +1,5 @@
 
-const CACHE = 'streetwise-commercial-v37-project-access';
+const CACHE = 'streetwise-commercial-v38-receipt-save-verification';
 
 const ASSETS = [
   './',

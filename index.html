@@ -1547,7 +1547,7 @@ async function boot(){
   // Otherwise currentCompany is still null and the saved navigation is overwritten.
   restoreNavigation();
   render();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=37');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=38');
   const c=window.STREETWISE_CONFIG||{};
   if(!c.SUPABASE_URL || String(c.SUPABASE_URL).indexOf('YOUR-PROJECT')>=0 || !c.SUPABASE_PUBLISHABLE_KEY || String(c.SUPABASE_PUBLISHABLE_KEY).indexOf('YOUR_SUPABASE')>=0){
     setAuthStatus('Cloud setup is not connected yet. Add your Supabase project values to config.js.');

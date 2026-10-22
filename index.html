@@ -298,6 +298,9 @@ function materialsSection(receipts,summary,usage){
 <div class="card"><div class="section-head"><h2>Stock Summary</h2><span class="muted">${currentMaterialCategory==='All'?'All categories':inlineEsc(currentMaterialCategory)}</span></div><div style="overflow:auto"><table><thead><tr><th>Category</th><th>Material</th><th>Project</th><th>Unit</th><th>Total Received</th><th>Total Used</th><th>Balance</th><th>Avg Cost</th><th>Receipt Value</th><th>Stock</th></tr></thead><tbody>${summary||`<tr><td colspan="10" class="empty">No stock records in this category.</td></tr>`}</tbody></table></div></div>
 </div>
 <div class="section two">
+<div class="card"><div class="section-head"><div><h2>Stock Movement Ledger</h2><div class="muted">Chronological receipt and usage history with running balance. Built from existing records; no separate ledger table is created.</div></div><span class="muted">${materialMovementRows().length} movements</span></div><div style="overflow:auto"><table><thead><tr><th>Date</th><th>Movement</th><th>Project</th><th>Category</th><th>Material</th><th>Unit</th><th>Qty In</th><th>Qty Out</th><th>Running Balance</th><th>Reference / Purpose</th><th>Received By</th><th>Notes</th></tr></thead><tbody>${materialMovementRows().map(x=>`<tr><td>${inlineEsc(x.date)}</td><td><span class="pill ${x.kind==='Receipt'?'green':'orange'}">${x.kind}</span></td><td>${inlineEsc(x.project)}</td><td>${inlineEsc(x.category)}</td><td><strong>${inlineEsc(x.name)}</strong></td><td>${inlineEsc(x.unit)}</td><td>${x.received?num(x.received):'—'}</td><td>${x.used?num(x.used):'—'}</td><td><strong>${num(x.balance)}</strong></td><td>${inlineEsc(x.reference)}</td><td>${inlineEsc(x.person)}</td><td>${inlineEsc(x.notes)}</td></tr>`).join('')||'<tr><td colspan="12" class="empty">No stock movements for this category.</td></tr>'}</tbody></table></div></div>
+</div>
+<div class="section two">
 <div class="card"><div class="section-head"><h2>Material Receipts</h2><span class="muted">Every delivery stays as its own record</span></div><div style="overflow:auto"><table><thead><tr>${['Date','Category','Project','Material','Unit','Qty Received','Unit Cost','Total Cost','Supplier','Delivery Note','Vehicle Reg.','Received At','Received By','Notes','Actions'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${receipts||`<tr><td colspan="11" class="empty">No receipts in this category.</td></tr>`}</tbody></table></div></div>
 <div class="card"><div class="section-head"><h2>Material Usage</h2><span class="muted">Usage deductions are separate from receipts</span></div><div style="overflow:auto"><table><thead><tr><th>Date</th><th>Category</th><th>Project</th><th>Material</th><th>Unit</th><th>Qty Used</th><th>Used For</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${usage||`<tr><td colspan="9" class="empty">No usage recorded in this category.</td></tr>`}</tbody></table></div></div>
 </div>`)}
@@ -372,6 +375,26 @@ function materialSummaryRows(){
     map.get(key).usage+=Number(u.quantity||0);
   });
   return [...map.values()].map(g=>{g.balance=g.received-g.usage;g.avgCost=g.received?g.value/g.received:0;return g}).sort((a,b)=>a.name.localeCompare(b.name));
+}
+function materialMovementRows(){
+  const rows=[];
+  projectRows(data.materials||[]).forEach(x=>rows.push({
+    date:String(x.date||''),kind:'Receipt',key:materialKey(x),category:materialCategoryFor(x),
+    project:x.project||'General / Company Stock',name:x.name||'',unit:x.unit||'',
+    received:Number(x.qtyReceived||0),used:0,reference:x.deliveryNote||x.supplier||'',
+    person:x.receivedBy||'',notes:x.notes||'',order:0
+  }));
+  projectRows(data.materialUsage||[]).forEach(x=>rows.push({
+    date:String(x.date||''),kind:'Usage',key:materialKey(x),category:materialCategoryFor(x),
+    project:x.project||'General / Company Stock',name:x.name||'',unit:x.unit||'',
+    received:0,used:Number(x.quantity||0),reference:x.usedFor||'',person:'',
+    notes:x.notes||'',order:1
+  }));
+  rows.sort((a,b)=>a.date.localeCompare(b.date)||a.order-b.order||a.name.localeCompare(b.name));
+  const balances=new Map();
+  rows.forEach(x=>{const balance=(balances.get(x.key)||0)+x.received-x.used;balances.set(x.key,balance);x.balance=balance;});
+  return rows.filter(x=>currentMaterialCategory==='All'||x.category===currentMaterialCategory)
+    .sort((a,b)=>b.date.localeCompare(a.date)||b.order-a.order||a.name.localeCompare(b.name));
 }
 function projectMaterialStats(pid){
   const rows=data.materials.filter(x=>String(x.project_id||'')===String(pid));

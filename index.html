@@ -291,7 +291,7 @@ function materialsSection(receipts,summary,usage){
  const cats=materialCategoryNames();
  const tabs=['All',...cats].map(c=>`<button class="btn ${currentMaterialCategory===c?'primary':''}" onclick="setMaterialCategory('${inlineEsc(c)}')">${inlineEsc(c)}</button>`).join('');
  return shell('materials',`
-<div class="section-head"><div><div class="eyebrow">Materials Store</div><h2 style="margin:4px 0;font-size:20px">Materials</h2><div class="muted">Receipts remain as historical deliveries. Usage is deducted from the combined stock balance.</div></div><div class="module-tools"><button class="btn" onclick="exportMaterialReorderList()">⇩ Export Reorder List</button><button class="btn" onclick="openModal('materialCategory')">＋ Add Category</button><button class="btn" onclick="openModal('materialUsage')">− Record Usage</button><button class="btn" onclick="openModal('materialAdjustment')">± Reconcile / Adjust Stock</button><button class="btn" onclick="openModal('excelImport','materials')">⇧ Import Excel</button><button class="btn primary" onclick="openModal('material')">＋ Add Receipt</button></div></div>
+<div class="section-head"><div><div class="eyebrow">Materials Store</div><h2 style="margin:4px 0;font-size:20px">Materials</h2><div class="muted">Receipts remain as historical deliveries. Usage is deducted from the combined stock balance.</div></div><div class="module-tools"><button class="btn" onclick="exportMaterialReorderList()">⇩ Export Reorder List</button><button class="btn" onclick="createProcurementDrafts()">＋ Create Procurement Drafts</button><button class="btn" onclick="openModal('materialCategory')">＋ Add Category</button><button class="btn" onclick="openModal('materialUsage')">− Record Usage</button><button class="btn" onclick="openModal('materialAdjustment')">± Reconcile / Adjust Stock</button><button class="btn" onclick="openModal('excelImport','materials')">⇧ Import Excel</button><button class="btn primary" onclick="openModal('material')">＋ Add Receipt</button></div></div>
 <div class="card" style="margin-bottom:13px"><div class="section-head"><h2>Material Categories</h2><span class="muted">${cats.length} categories</span></div><div style="display:flex;gap:7px;flex-wrap:wrap">${tabs}</div></div>
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:13px">${(()=>{const stock=materialSummaryRows();const low=stock.filter(x=>Number(x.reorder)>0&&Number(x.balance)<=Number(x.reorder));const out=stock.filter(x=>Number(x.balance)<=0);const value=stock.reduce((n,x)=>n+Math.max(0,Number(x.balance))*Number(x.avgCost||0),0);return `<div class="card metric"><small>Stock Items</small><div class="num">${stock.length}</div><div class="note">Unique project / material / unit combinations</div></div><div class="card metric"><small>Low Stock</small><div class="num ${low.length?'down':'up'}">${low.length}</div><div class="note">At or below reorder level</div></div><div class="card metric"><small>Out of Stock</small><div class="num ${out.length?'down':'up'}">${out.length}</div><div class="note">Zero or negative balance</div></div><div class="card metric"><small>Estimated Stock Value</small><div class="num">${money(value)}</div><div class="note">Balance × weighted average receipt cost</div></div>`})()}</div>
 <div class="section two">
@@ -1145,6 +1145,30 @@ async function addMaterialCategory(){
   const item={id:'CAT-'+Date.now(),db_id:null,project_id:pid,name,sort_order:(data.materialCategories||[]).length+1};
   if(cloudReady&&currentCompany){const r=await sb.from('material_categories').insert({company_id:currentCompany.company_id,project_id:pid,name,sort_order:item.sort_order,created_by:currentUser.id}).select('id').single();if(r.error){toast('Category save failed: '+r.error.message);return;}item.db_id=r.data.id;item.id=r.data.id;}
   data.materialCategories.push(item);save();closeModal();render();show('materials');currentMaterialCategory=name;toast(`Category added: ${name}`);
+}
+function createProcurementDrafts(){
+  const low=materialRowsByCategory(materialSummaryRows()).filter(x=>Number(x.reorder)>0&&Number(x.balance)<=Number(x.reorder));
+  if(!low.length){toast('No reorder items to add to procurement.');return;}
+  const pending=low.filter(x=>!(data.procurement||[]).some(p=>{
+    const sameProject=String(p.project_id||'')===String(x.project_id||'');
+    const item=String(p.item||'').toLowerCase();
+    const sameMaterial=item.includes(String(x.name||'').toLowerCase())&&item.includes('reorder');
+    return sameProject&&sameMaterial&&!['Delivered','Complete','Completed','Cancelled'].includes(String(p.status||''));
+  }));
+  if(!pending.length){toast('Open procurement drafts already exist for these reorder items.');return;}
+  const drafts=pending.map(x=>({
+    id:'PROC-DRAFT-'+Date.now()+'-'+Math.random().toString(16).slice(2),
+    project_id:x.project_id||null,project:x.project||'General / Company Stock',
+    item:String(x.name||'Material')+' ('+String(x.unit||'')+') - Reorder',
+    supplier:'',qty:Math.max(0,Number(x.reorder||0)-Number(x.balance||0)),
+    value:Math.max(0,Number(x.reorder||0)-Number(x.balance||0))*Number(x.avgCost||0),
+    status:'Pending',notes:'Draft created from material reorder planning'
+  }));
+  data.procurement.push(...drafts);
+  const saved=save();
+  if(saved===false){data.procurement=data.procurement.filter(x=>!drafts.includes(x));return;}
+  render();show('procurement');
+  toast(drafts.length+' procurement draft(s) created. Add supplier details before ordering.');
 }
 function exportMaterialReorderList(){
   const rows=materialRowsByCategory(materialSummaryRows()).filter(x=>Number(x.reorder)>0&&Number(x.balance)<=Number(x.reorder));

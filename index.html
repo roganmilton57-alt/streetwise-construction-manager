@@ -1146,7 +1146,7 @@ async function addMaterialCategory(){
   if(cloudReady&&currentCompany){const r=await sb.from('material_categories').insert({company_id:currentCompany.company_id,project_id:pid,name,sort_order:item.sort_order,created_by:currentUser.id}).select('id').single();if(r.error){toast('Category save failed: '+r.error.message);return;}item.db_id=r.data.id;item.id=r.data.id;}
   data.materialCategories.push(item);save();closeModal();render();show('materials');currentMaterialCategory=name;toast(`Category added: ${name}`);
 }
-async function exportMaterialReorderList(){
+function exportMaterialReorderList(){
   const rows=materialRowsByCategory(materialSummaryRows()).filter(x=>Number(x.reorder)>0&&Number(x.balance)<=Number(x.reorder));
   if(!rows.length){toast('No materials are currently at or below their reorder level.');return;}
   const headers=['Project','Category','Material','Unit','Available Balance','Reorder Level','Suggested Order Quantity','Average Unit Cost','Estimated Order Cost'];
@@ -1156,7 +1156,7 @@ async function exportMaterialReorderList(){
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='streetwise-material-reorder-list-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   toast('Reorder list exported.');
 }
-function addMaterialUsage(){
+async function addMaterialUsage(){
   const date=document.getElementById('u1').value, projectName=document.getElementById('u2').value, selectedStockKey=document.getElementById('u3').value, quantity=Number(document.getElementById('u4').value||0), usedFor=document.getElementById('u5').value, notes=document.getElementById('u6').value;
   const selectedStock=materialSummaryRows().find(x=>x.key===selectedStockKey);
   const name=selectedStock?.name||'';

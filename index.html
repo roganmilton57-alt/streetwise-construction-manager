@@ -391,8 +391,8 @@ function exportMaterialMovementLedger(){
     if(/^[=+@\\-\\t\\r]/.test(s))s="'"+s;
     return '"'+s.replace(/"/g,'""')+'"';
   };
-  const csv=[columns.map(c=>csvCell(c[0])).join(','),...rows.map(row=>columns.map(c=>csvCell(c[1](row))).join(','))].join('\\r\\n');
-  const blob=new Blob(['\\uFEFF',csv],{type:'text/csv;charset=utf-8;'});
+  const csv=[columns.map(c=>csvCell(c[0])).join(','),...rows.map(row=>columns.map(c=>csvCell(c[1](row))).join(','))].join('\r\n');
+  const blob=new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='streetwise-stock-movement-ledger.csv';document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -1152,7 +1152,7 @@ function exportMaterialReorderList(){
   const headers=['Project','Category','Material','Unit','Available Balance','Reorder Level','Suggested Order Quantity','Average Unit Cost','Estimated Order Cost'];
   const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
   const lines=[headers,...rows.map(x=>[x.project,x.category,x.name,x.unit,Number(x.balance||0),Number(x.reorder||0),Math.max(0,Number(x.reorder||0)-Number(x.balance||0)),Number(x.avgCost||0),Math.max(0,Number(x.reorder||0)-Number(x.balance||0))*Number(x.avgCost||0)])].map(row=>row.map(quote).join(','));
-  const blob=new Blob(['\\ufeff'+lines.join('\\r\\n')],{type:'text/csv;charset=utf-8;'});
+  const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='streetwise-material-reorder-list-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   toast('Reorder list exported.');
 }

@@ -1782,7 +1782,9 @@ async function loadCloudWorkspace(){
 
   const adjustments=await sb.from('material_adjustment_records').select('id,project_id,adjustment_date,category,material,unit,quantity,reason,notes,created_by,created_by_email,created_at').eq('company_id',currentCompany.company_id).order('adjustment_date',{ascending:true}).order('created_at',{ascending:true});
   if(adjustments.error){cloudLoadError='Material stock adjustments load failed: '+adjustments.error.message;return false;}
-  data.materialAdjustments=(adjustments.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'',date:x.adjustment_date||'',category:x.category||'General Site Materials',name:x.material||'',unit:x.unit||'',quantity:Number(x.quantity||0),reason:x.reason||'',notes:x.notes||'',recordedBy:x.created_by_email||'Staff member',createdAt:x.created_at||''}));
+  const staffNames=new Map();
+  try{const team=await sb.rpc('streetwise_list_company_team',{p_company_id:currentCompany.company_id});(team.data||[]).forEach(member=>{if(member.user_id&&member.full_name)staffNames.set(String(member.user_id),String(member.full_name).trim());});}catch(e){console.warn('Staff name lookup unavailable for stock ledger.',e);}
+  data.materialAdjustments=(adjustments.data||[]).map(x=>({id:x.id,db_id:x.id,project_id:x.project_id,project:materialProjectNames.get(x.project_id)||'',date:x.adjustment_date||'',category:x.category||'General Site Materials',name:x.material||'',unit:x.unit||'',quantity:Number(x.quantity||0),reason:x.reason||'',notes:x.notes||'',recordedBy:(x.created_by_email&&x.created_by_email!=='Staff member'?x.created_by_email:'')||staffNames.get(String(x.created_by||''))||'Staff member',createdAt:x.created_at||''}));
   const b=await sb.from('boq_items')
     .select('id,project_id,code,description,unit,quantity,rate,budget,actual,progress,planned_progress,progress_status,progress_notes,work_value')
     .eq('company_id',currentCompany.company_id)

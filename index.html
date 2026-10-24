@@ -119,12 +119,58 @@ let currentRole='read_only', authLoadUid=null, authLoadPromise=null, authListene
 const roleModules={administrator:null,project_manager:['projects','dashboard','boq','materials','labour','procurement','progress','schedule','variations','reports','diary','instructions','documents','submittals','quality','snags','expenses'],quantity_surveyor:['projects','dashboard','boq','progress','schedule','variations','reports','diary','instructions','documents','submittals','quality','snags','expenses'],site_engineer:['projects','dashboard','materials','labour','progress','schedule','reports','diary','instructions','documents','submittals','quality','snags'],storekeeper:['projects','materials','procurement','diary','reports'],read_only:['projects','dashboard','boq','materials','labour','procurement','progress','schedule','variations','reports','diary','instructions','documents','submittals','quality','snags','expenses']};
 function userCacheKey(suffix){return 'streetwise:'+String(currentUser?.id||'signed-out')+':'+String(currentCompany?.company_id||'no-company')+':'+suffix;}
 const money=n=>new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:0}).format(n||0);
-let save=()=>{if(!cloudReady||!currentCompany){toast('Cloud is not ready. Nothing was saved.');return false}persistCloud();return true};
+let save=()=>{
+  if(!cloudReady||!currentCompany||!currentUser){
+    toast('Cloud is not ready. Nothing was saved.');
+    return false;
+  }
+  // Keep one tracked save promise so UI success messages are only shown
+  // after Supabase confirms the project-scoped payload write.
+  const run=async()=>{
+    try{
+      const ok=await persistCloud();
+      if(!ok){
+        streetwiseDeferredSaveToast=null;
+        toast('Cloud save failed. Your latest changes may not be stored. Please retry.');
+        return false;
+      }
+      if(streetwiseDeferredSaveToast){
+        const message=streetwiseDeferredSaveToast;
+        streetwiseDeferredSaveToast=null;
+        toast(message);
+      }
+      return true;
+    }catch(error){
+      streetwiseDeferredSaveToast=null;
+      toast('Cloud save failed: '+(error?.message||'unknown error')+'. Please retry.');
+      return false;
+    }finally{
+      streetwisePendingSave=null;
+    }
+  };
+  // Set a promise synchronously before callers can display their success toast.
+  streetwisePendingSave=Promise.resolve().then(run);
+  return streetwisePendingSave;
+};
 function saveNavigation(){try{if(!currentUser)return;localStorage.setItem('streetwise:'+String(currentUser.id)+':navigation',JSON.stringify({userId:currentUser.id,companyId:currentCompany?.company_id||null,projectId:currentProjectId,moduleId:currentModuleId,materialCategory:currentMaterialCategory}));}catch(e){}}
 function restoreNavigation(){try{if(!currentUser)return null;const n=JSON.parse(localStorage.getItem('streetwise:'+String(currentUser.id)+':navigation')||'null');if(n&&n.userId===currentUser.id){currentProjectId=n.projectId||null;currentModuleId=n.moduleId||'projects';currentMaterialCategory=n.materialCategory||'All';return n;}}catch(e){}return null}
 window.addEventListener('pagehide',saveNavigation);
 window.addEventListener('beforeunload',saveNavigation);
-function toast(t){let e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
+let streetwisePendingSave=null;
+let streetwiseDeferredSaveToast=null;
+function toast(t){
+  const message=String(t||'');
+  const isSuccess=/\b(saved|successfully|added|recorded|created|deleted|removed|imported|recalculated|mapped)\b/i.test(message)
+    && !/\b(failed|fail|could not|not saved|not confirmed|error|unable|cannot)\b/i.test(message);
+  if(isSuccess&&streetwisePendingSave){
+    streetwiseDeferredSaveToast=message;
+    return;
+  }
+  let e=document.getElementById('toast');
+  if(!e)return;
+  e.textContent=message;e.classList.add('show');
+  setTimeout(()=>e.classList.remove('show'),3000);
+}
 const projectControlIds=['instructions','documents','submittals','quality'];
 function nav(){
   const side=document.getElementById('nav'),mobile=document.getElementById('mobilebar');
